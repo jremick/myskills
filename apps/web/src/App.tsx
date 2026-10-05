@@ -1,4 +1,5 @@
 import { PackageEvaluationEvidence } from "@/components/registry/PackageEvaluationEvidence";
+import { SkillPreview } from "@/components/registry/SkillPreview";
 import { RecoveryGuidancePanel } from "./components/operations/RecoveryGuidancePanel.js";
 import { APPLICATION_SCOPES } from "@myskills-app/core";
 import { DeviceAuthorizePage } from "./components/DeviceAuthorizePage.js";
@@ -5803,6 +5804,13 @@ function SkillDetail({
             <code ref={commandRef}><CommandText command={command} /></code>
           </div>
           <div className="registry-use-actions">
+            {client.getReleaseBundle && <SkillPreview
+              key={JSON.stringify([selectedSkill.slug, release.version, release.artifact.sha256, platform, session?.user.id ?? "anonymous"])}
+              title={selectedSkill.title}
+              version={release.version}
+              platform={platform}
+              loadBundle={() => client.getReleaseBundle!(selectedSkill.slug, release.version, platform)}
+            />}
             <CopyButton
               className="registry-copy-command"
               failureHint="Copy failed. The command is selected; copy it with Ctrl+C or ⌘C."

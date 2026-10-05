@@ -17,6 +17,7 @@ const reviewedScreenshots = new Set([
   "collection-tracking-desktop.png", "group-mobile.png",
   "persistent-group-mobile.png", "persistent-group-desktop.png",
   "branding-desktop.png", "branding-mobile.png",
+  "skill-preview-1440.png", "skill-preview-390.png",
 ]);
 
 const [reportPath, resultsPath, outputPath] = process.argv.slice(2);

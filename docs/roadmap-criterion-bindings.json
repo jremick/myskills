@@ -2077,8 +2077,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2216,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 2217,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -2283,8 +2283,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 443,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 444,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4337,8 +4337,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 613,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 614,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4376,8 +4376,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 728,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 729,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4460,8 +4460,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2629,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 2630,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4528,8 +4528,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 253,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 254,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         },
         {
@@ -4573,8 +4573,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 253,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 254,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         }
       ],
@@ -4612,8 +4612,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 857,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 858,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -4645,8 +4645,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 443,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 444,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4690,8 +4690,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 562,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 563,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -4723,8 +4723,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 902,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 903,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4762,8 +4762,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 4476,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 4477,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4846,8 +4846,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 810,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 811,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4891,8 +4891,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2629,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 2630,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4959,8 +4959,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 902,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 903,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4998,8 +4998,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 838,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 839,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -5037,8 +5037,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 6521,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 6529,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "setDraft({"
         },
         {
@@ -5082,8 +5082,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 594,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 595,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -5189,8 +5189,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 253,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 254,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         },
         {
@@ -5618,8 +5618,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2629,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 2630,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -6072,8 +6072,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 253,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 254,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         },
         {
@@ -14583,8 +14583,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 443,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 444,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         },
         {
@@ -19909,8 +19909,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5960,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 5968,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -19954,8 +19954,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5960,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 5968,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -19999,8 +19999,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5960,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 5968,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20044,8 +20044,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 443,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 444,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20089,8 +20089,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 728,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 729,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20134,8 +20134,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5960,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 5968,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20179,8 +20179,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5960,
-          "sha256": "58058b4daa3a54276e1088949526ec49a5f9267c5f5b252919c67afffc9d8505",
+          "line": 5968,
+          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
           "anchor": "useEffect(() => {"
         }
       ],

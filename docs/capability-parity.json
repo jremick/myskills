@@ -64,7 +64,7 @@
         "detail": "Registry filters and pagination",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 676,
+          "line": 677,
           "anchor": "const request = registryClient.searchSkillPage"
         },
         "evidence": [
@@ -160,7 +160,7 @@
         "detail": "Skill inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5741,
+          "line": 5742,
           "anchor": "function SkillDetail({"
         },
         "evidence": [
@@ -360,7 +360,7 @@
         "detail": "Exact version inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5741,
+          "line": 5742,
           "anchor": "function SkillDetail({"
         },
         "evidence": [
@@ -477,16 +477,24 @@
       },
       "ui": {
         "status": "B",
-        "detail": "Export/install CLI command handoff",
+        "detail": "View Skill previews the selected exact release’s root SKILL.md on demand; package files remain inspectable as text. Export/install completion remains a CLI/runtime handoff.",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 919,
+          "line": 920,
           "anchor": "selectedSkill && release && supportedDetailPlatform ? exportCommand(selectedSkill.slug, release.version, supportedDetailPlatform) : \"\""
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Export/install CLI command handoff. Runtime parity is not implied."
+          },
+          {
+            "level": "contract",
+            "detail": "10 component tests passed for on-demand exact root instructions, safe Markdown/GFM/frontmatter, inert HTML/images/unsafe links, missing/empty/invalid files, retry, repeated clicks, StrictMode, stale request cancellation and identity remount. Mocked bundle responses and JSDOM; browser and live authorization evidence are separate.",
+            "source": {
+              "path": "apps/web/test/skill-preview.test.tsx",
+              "line": 1
+            }
           }
         ]
       },
@@ -996,7 +1004,7 @@
         "detail": "Sharing editor",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 6090,
+          "line": 6098,
           "anchor": "const next = await client.updateSkillSharing({"
         },
         "evidence": [
@@ -1525,7 +1533,7 @@
         "detail": "Submit archive",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2252,
+          "line": 2253,
           "anchor": "const submitted = await client.submitArchive({"
         },
         "evidence": [
@@ -1621,7 +1629,7 @@
         "detail": "My submissions",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2208,
+          "line": 2209,
           "anchor": "setSubmissions(await client.listUserSubmissions());"
         },
         "evidence": [
@@ -1843,7 +1851,7 @@
         "detail": "Export own submission",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2270,
+          "line": 2271,
           "anchor": "const bundle = await client.exportUserSubmission(submission.id);"
         },
         "evidence": [
@@ -1939,7 +1947,7 @@
         "detail": "Withdraw control",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2296,
+          "line": 2297,
           "anchor": "await client.performSubmissionAction(submission.id, \"withdraw\", confirmedReason);"
         },
         "evidence": [
@@ -2043,7 +2051,7 @@
         "detail": "Review queue and load more",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2595,
+          "line": 2596,
           "anchor": "return client.listReviewSubmissionPage ? client.listReviewSubmissionPage({ limit: 100, cursor })"
         },
         "evidence": [
@@ -2387,7 +2395,7 @@
         "detail": "Review actions",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2662,
+          "line": 2663,
           "anchor": "const result = await client.performReviewAction({"
         },
         "evidence": [
@@ -5546,7 +5554,7 @@
         "detail": "Teams dashboard",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3182,
+          "line": 3183,
           "anchor": "client.listTeams(),"
         },
         "evidence": [
@@ -5650,7 +5658,7 @@
         "detail": "Create team",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3274,
+          "line": 3275,
           "anchor": "await client.createTeam(teamName);"
         },
         "evidence": [
@@ -5760,7 +5768,7 @@
         "detail": "Team invitations",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3293,
+          "line": 3294,
           "anchor": "await client.inviteTeamMember(invitedTeam.id, email);"
         },
         "evidence": [
@@ -6068,7 +6076,7 @@
         "detail": "Team shared skills",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3183,
+          "line": 3184,
           "anchor": "client.listTeamSharedSkills(),"
         },
         "evidence": [
@@ -6177,7 +6185,7 @@
         "detail": "Organizations dashboard",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 371,
+          "line": 372,
           "anchor": "const canUseOrganizations = Boolean(session && registryClient.listOrganizations);"
         },
         "evidence": [
@@ -10543,7 +10551,7 @@
         "detail": "Invitation registration only; no open/request self-registration form",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2047,
+          "line": 2048,
           "anchor": "await client.registerWithInvitation({"
         },
         "evidence": [
@@ -10735,7 +10743,7 @@
         "detail": "Login/MFA/sign out and /auth/device explicit permission review/approve/deny.",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1171,
+          "line": 1172,
           "anchor": "const result = await registryClient.verifyMfa({"
         },
         "evidence": [
@@ -10851,7 +10859,7 @@
         "detail": "Account/session identity",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 637,
+          "line": 638,
           "anchor": "registryClient.getMe()"
         },
         "evidence": [
@@ -10960,7 +10968,7 @@
         "detail": "Confirmation route; no request/resend action",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4295,
+          "line": 4296,
           "anchor": "await client.confirmEmailVerification({ token });"
         },
         "evidence": [
@@ -11065,7 +11073,7 @@
         "detail": "Password reset forms",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1194,
+          "line": 1195,
           "anchor": "await registryClient.requestPasswordReset(input);"
         },
         "evidence": [
@@ -11176,7 +11184,7 @@
         "detail": "Account security forms",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4507,
+          "line": 4508,
           "anchor": "await client.changePassword({ currentPassword: passwordInput.currentPassword, password: passwordInput.password });"
         },
         "evidence": [
@@ -11293,7 +11301,7 @@
         "detail": "MFA setup/settings",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5347,
+          "line": 5348,
           "anchor": "const nextEnrollment = await client.startTotpEnrollment({ password: passwordOverride ?? password, label: \"1Password\" });"
         },
         "evidence": [
@@ -11417,7 +11425,7 @@
         "detail": "Token settings",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4579,
+          "line": 4580,
           "anchor": "const token = await client.createApiToken({"
         },
         "evidence": [
@@ -12719,7 +12727,7 @@
         "detail": "Archive submission performs scanning; no scaffold/package workspace editor",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2252,
+          "line": 2253,
           "anchor": "const submitted = await client.submitArchive({"
         },
         "evidence": [

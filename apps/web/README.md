@@ -10,6 +10,7 @@ Implemented:
 - public approved skill search against `GET /v1/skills`
 - skill detail and release metadata against `GET /v1/skills/:slug` and `GET /v1/skills/:slug/releases/:version`
 - metadata-only detail panel that does not fetch package bundle content during normal render
+- on-demand View Skill overlay for the selected exact release's root `SKILL.md`, with safe Markdown rendering and keyboard-accessible dismissal
 - CLI export guidance derived from the selected release and platform
 - email/password login, MFA challenge completion, current-user refresh, and logout
 - public invitation registration with fragment-token scrubbing, safe invalid/expired states, and login handoff

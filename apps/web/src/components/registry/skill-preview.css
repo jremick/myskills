@@ -1,0 +1,59 @@
+.app-shell .skill-preview-dialog {
+  width: min(840px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 48px);
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 20px 60px rgba(17, 26, 38, 0.2);
+}
+.skill-preview-dialog[open] { display: flex; flex-direction: column; }
+.skill-preview-dialog::backdrop { background: rgba(17, 26, 38, 0.45); }
+.skill-preview-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 20px 24px 16px; border-bottom: 1px solid var(--line-soft); }
+.skill-preview-header > div { min-width: 0; }
+.skill-preview-header h2 { margin: 0; color: var(--ink); font-size: 20px; line-height: 28px; font-weight: 600; overflow-wrap: anywhere; }
+.skill-preview-header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+.skill-preview-version { font-family: var(--font-mono); }
+.skill-preview-body { min-height: 160px; padding: 24px; overflow: auto; overscroll-behavior: contain; }
+.skill-preview-state { display: grid; justify-items: start; gap: 12px; color: var(--ink-soft); font-size: 14px; line-height: 22px; }
+.skill-preview-footer { padding: 12px 24px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; line-height: 18px; }
+.skill-preview-markdown { color: var(--ink-soft); font-size: 15px; line-height: 1.7; overflow-wrap: anywhere; }
+.skill-preview-markdown > :first-child { margin-top: 0; }
+.skill-preview-markdown > :last-child { margin-bottom: 0; }
+.skill-preview-markdown :is(h1, h2, h3, h4, h5, h6) { margin: 1.5em 0 0.6em; color: var(--ink); font-weight: 600; line-height: 1.35; letter-spacing: 0; }
+.skill-preview-markdown h1 { font-size: 26px; }
+.skill-preview-markdown h2 { font-size: 21px; }
+.skill-preview-markdown h3 { font-size: 18px; }
+.skill-preview-markdown :is(h4, h5, h6) { font-size: 15px; }
+.skill-preview-markdown :is(p, ul, ol, pre, blockquote, table, details) { margin: 0 0 16px; }
+.skill-preview-markdown :is(ul, ol) { padding-left: 24px; }
+.skill-preview-markdown ul { list-style: disc; }
+.skill-preview-markdown ol { list-style: decimal; }
+.skill-preview-markdown li + li { margin-top: 4px; }
+.skill-preview-markdown li > :last-child { margin-bottom: 0; }
+.skill-preview-markdown code { border-radius: 4px; padding: 2px 5px; background: var(--surface-sunken); font-family: var(--font-mono); font-size: 0.86em; }
+.skill-preview-markdown pre { max-width: 100%; padding: 14px 16px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--surface-soft); overflow-x: auto; }
+.skill-preview-markdown pre code { padding: 0; background: none; }
+.skill-preview-markdown blockquote { border-left: 3px solid var(--teal); padding: 4px 0 4px 16px; color: var(--muted); }
+.skill-preview-markdown blockquote > :last-child { margin-bottom: 0; }
+.skill-preview-markdown a { color: var(--teal); text-decoration: underline; text-underline-offset: 3px; }
+.skill-preview-markdown hr { margin: 24px 0; border: 0; border-top: 1px solid var(--line); }
+.skill-preview-table { max-width: 100%; margin-bottom: 16px; overflow-x: auto; }
+.skill-preview-markdown table { width: 100%; margin: 0; border-collapse: collapse; text-align: left; font-size: 14px; }
+.skill-preview-markdown :is(th, td) { border: 1px solid var(--line); padding: 8px 12px; }
+.skill-preview-markdown th { background: var(--surface-soft); color: var(--ink); font-weight: 600; }
+.skill-preview-frontmatter { font-size: 13px; color: var(--muted); }
+.skill-preview-frontmatter summary { width: fit-content; margin-bottom: 8px; cursor: pointer; }
+.skill-preview-image { color: var(--muted); font-style: italic; }
+.skill-preview-dialog :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+.skill-preview-body:focus-visible { outline-offset: -3px; }
+@media (max-width: 600px) {
+  .app-shell .skill-preview-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 24px); }
+  .skill-preview-header { padding: 16px; }
+  .skill-preview-body { padding: 20px 16px; }
+  .skill-preview-footer { padding: 12px 16px; }
+}
