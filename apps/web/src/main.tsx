@@ -4,6 +4,7 @@ import { RegistryApp } from "./App.js";
 import { installAnalytics } from "./analytics.js";
 import "./styles.css";
 import "./components/registry/bundles.css";
+import "./components/registry/skill-preview.css";
 
 installAnalytics();
 
