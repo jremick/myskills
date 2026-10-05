@@ -1,16 +1,19 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.19
+Version: 0.1.0-beta.20
 Last updated: 2026-09-30
 
-Target release: `v0.1.0-beta.19`.
+Target release: `v0.1.0-beta.20`.
 
-Status: beta.18 release preparation. This candidate adds CLI/MCP capability
-parity, opt-in OAuth connections, dependency repairs and delivery tooling to
-beta.17. Final-source verification, staging, actual ChatGPT/Claude acceptance,
-GitHub/npm publication and hosted promotion remain pending. Tracked Collections
-and Library Groups remain in progress pending model decisions and are excluded
-from this candidate. See [Beta.18 release preparation](BETA18_RELEASE_DELIVERY.md).
+Status: beta.20 release preparation for bounded CLI browser-login resilience.
+Pending requests can resume securely within their original deadline; consent,
+scopes, MFA assurance, token lifetime and one-time API redemption remain intact.
+The local 72-check selection passed with synthetic keyring storage and real
+loopback HTTP/processes. Native keyring and real account acceptance remain
+unverified. Final exact-source checks, immutable tagging and GitHub/npm
+publication are pending. Cumulative source artifacts also retain the device
+form spacing from merged PR #136. Hosted API/web/MCP deployment is unchanged. See
+[Beta.20 release preparation](BETA20_RELEASE_DELIVERY.md).
 
 ## Beta.17 Release Record
 

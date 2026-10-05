@@ -2,6 +2,7 @@
 import { runCli, type FetchLike } from "./cli.js";
 import { createFileConfigStore } from "./config-store.js";
 import { createTokenStore } from "./token-store.js";
+import { createDeviceLoginStore } from "./device-login-store.js";
 import { createTerminalPrompt } from "./terminal-prompt.js";
 
 const fetchImpl = (globalThis as unknown as { fetch: FetchLike }).fetch;
@@ -11,7 +12,7 @@ try {
   const exitCode = await runCli(process.argv.slice(2), {
     env: process.env,
     fetch: fetchImpl,
-    createStores: (env, namespace) => ({ configStore: createFileConfigStore(env), tokenStore: createTokenStore(env, namespace) }),
+    createStores: (env, namespace) => ({ configStore: createFileConfigStore(env), tokenStore: createTokenStore(env, namespace), deviceLoginStore: createDeviceLoginStore(namespace) }),
     prompt,
     io: {
       stdout: (line) => console.log(line),

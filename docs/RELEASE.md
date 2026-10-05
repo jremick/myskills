@@ -1,15 +1,32 @@
 # Release Process
 
-Version: 0.1.0-beta.19
+Version: 0.1.0-beta.20
 Last updated: 2026-10-02
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
+## Beta.20 candidate
+
+The current target is `v0.1.0-beta.20`: a CLI-focused follow-up to published beta.19.
+It adds secure resumption of pending browser/device login, bounded original
+expiry and polling, process serialization, explicit `--no-resume`, and distinct
+credential/configuration-save outcomes. API consent, scopes, MFA, token lifetime
+and one-time redemption are unchanged. No migration, dependency update or
+hosted API/web/MCP deployment is included. Cumulative source artifacts also
+retain the device authorization form spacing already merged in
+[PR #136](https://github.com/jremick/myskills/pull/136).
+
+Local synthetic-keyring, HTTP and process evidence is recorded in
+[Beta.20 release preparation](BETA20_RELEASE_DELIVERY.md). Native keyring and
+real account acceptance remain unverified. Complete exact-source required
+checks and artifact verification before immutable tagging and publication;
+this preparation does not claim beta.20 has been released.
+
 ## Beta.19 candidate
 
-The current target is `v0.1.0-beta.19`. It carries the merged, unreleased
+The beta.19 preparation target was `v0.1.0-beta.19`. It carried the merged, unreleased
 beta.18 CLI/MCP, OAuth, dependency and Collections/Groups scope, the architecture
 explorer from [PR #126](https://github.com/jremick/myskills/pull/126), and the
 roadmap source in [PR #133](https://github.com/jremick/myskills/pull/133): private
@@ -264,7 +281,7 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Publication
 
-The prepared CLI candidate is `0.1.0-beta.19`. The recorded publication snapshot
+The prepared CLI candidate is `0.1.0-beta.20`. The recorded publication snapshot
 on 30 September 2026 had the GitHub CLI archive at `0.1.0-beta.17` and npm's
 `beta` selector at `0.1.0-beta.16`. The package uses
 `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private

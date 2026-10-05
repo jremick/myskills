@@ -59,8 +59,7 @@ export function createKeyringTokenStore(
   backend: KeyringTokenBackend = nativeKeyringBackend,
   namespace?: string,
 ): CliTokenStore {
-  const prefix = namespace === undefined ? undefined : `config-profile:${createHash("sha256").update(namespace).digest("hex")}:`;
-  const credentialKey = (apiUrl: string) => prefix === undefined ? apiUrl : `${prefix}${normalizeApiUrl(apiUrl)}`;
+  const credentialKey = (apiUrl: string) => keyringCredentialKey(apiUrl, namespace);
   let usedFallback = false;
   return {
     async get(apiUrl) {
@@ -122,7 +121,7 @@ export function createKeyringTokenStore(
 }
 
 // keyring >=2 propagates access failures; null/false mean a confirmed missing entry.
-const nativeKeyringBackend: KeyringTokenBackend = {
+export const nativeKeyringBackend: KeyringTokenBackend = {
   async get(apiUrl) {
     const { Entry } = await import("@napi-rs/keyring");
     return new Entry(KEYRING_SERVICE, keyringAccount(apiUrl)).getPassword();
@@ -136,6 +135,12 @@ const nativeKeyringBackend: KeyringTokenBackend = {
     new Entry(KEYRING_SERVICE, keyringAccount(apiUrl)).deletePassword();
   },
 };
+
+/** Share the exact credential identity with pending-login serialization. */
+export function keyringCredentialKey(apiUrl: string, namespace?: string): string {
+  const prefix = namespace === undefined ? "" : `config-profile:${createHash("sha256").update(namespace).digest("hex")}:`;
+  return `${prefix}${normalizeApiUrl(apiUrl)}`;
+}
 
 function tokenFilePath(env: Record<string, string | undefined>): string {
   if (env.MYSKILLS_TOKEN_FILE) {

@@ -64,13 +64,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 9,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Responsible public alpha (`v0.1.0-alpha.0`)**: archived release track for the first public repository and reproducible source artifact gate."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 7,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Release Tracks"
         },
         {
@@ -101,13 +101,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 10,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Public beta (`v0.1.0-beta.1`)**: superseded external trial release that established owner-controlled hosted access and documented self-hosting boundaries."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 632,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Milestone 9: Business-Safe Production Release"
         },
         {
@@ -138,13 +138,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 11,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Beta follow-up (`v0.1.0-beta.2`)**: released 2026-07-13 with local onboarding, artifact/review safety, public CLI packaging, static quality gates, release discipline, and reconciled docs. See [BETA_RELEASE_GOAL.md](B"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 7,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Release Tracks"
         },
         {
@@ -175,13 +175,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 12,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Operational beta (`v0.1.0-beta.5`)**: released with the governed Codex workspace install/update/rollback path and recorded staging and production verification. See [Operational Beta Delivery](OPERATIONAL_BETA_DELIVER"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 632,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Milestone 9: Business-Safe Production Release"
         },
         {
@@ -212,13 +212,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 13,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **CLI follow-up (`v0.1.0-beta.6`)**: released with the dry-run-only work/team Codex bootstrap planner. This CLI release did not promote Railway."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 632,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Milestone 9: Business-Safe Production Release"
         },
         {
@@ -249,13 +249,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 14,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Adoption follow-up (`v0.1.0-beta.7`)**: GitHub prerelease published and"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 685,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Native MCP Skill Delivery (MCP-1)"
         },
         {
@@ -286,13 +286,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 21,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Libraries and skill improvement (`v0.1.0-beta.8`)**: GitHub prerelease,"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 136,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Adoption Features For Delivery Review"
         },
         {
@@ -323,13 +323,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 30,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Public landing page (`v0.1.0-beta.9`)**: GitHub prerelease and hosted"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 82,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Current Focus"
         },
         {
@@ -360,13 +360,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 32,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Skill bundles (`v0.1.0-beta.10`)**: GitHub prerelease and hosted API/web"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 82,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Current Focus"
         },
         {
@@ -397,13 +397,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 34,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Application redesign (`v0.1.0-beta.12`)**: GitHub prerelease and hosted"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 82,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Current Focus"
         },
         {
@@ -434,13 +434,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 41,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Authenticator enrollment (`v0.1.0-beta.13`)**: local QR rendering, manual"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 82,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Current Focus"
         },
         {
@@ -471,13 +471,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 47,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Instance branding (`v0.1.0-beta.14` and `v0.1.0-beta.15`)**: logo and brand-text"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 111,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Foundation Delivery Batch"
         },
         {
@@ -508,13 +508,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 51,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Configuration profiles and scope (`v0.1.0-beta.16`)**: separate CLI profiles,"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 82,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Current Focus"
         },
         {
@@ -545,13 +545,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 56,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Skills workspace (`v0.1.0-beta.17`)**: the unified Skills workspace, Library"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 411,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Milestone 7A: Skill Architecture Control Plane MVE"
         },
         {
@@ -582,13 +582,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 69,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Current publication and hosted snapshot (30 September 2026)**: GitHub has"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 111,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Foundation Delivery Batch"
         },
         {
@@ -619,13 +619,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 76,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- **Portable local CI**: [PR #120](https://github.com/jremick/myskills/pull/120)"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 546,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Milestone 7E: Pattern migration and editor history"
         },
         {
@@ -1199,13 +1199,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 176,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- Private personal repo exists."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 170,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Milestone 0: Private Project Setup"
         },
         {
@@ -1236,7 +1236,7 @@
         {
           "path": "package.json",
           "line": 1,
-          "sha256": "218d3dd28b77cf72546e255f392e3c5f3dd8549dfb5f97be9fd956d718321d6d",
+          "sha256": "cb324767e048d6e2434c1b1f679a614fac76157dbd257c8395f73bd9e0a37cae",
           "anchor": "{"
         },
         {
@@ -1329,7 +1329,7 @@
         {
           "path": "package.json",
           "line": 1,
-          "sha256": "218d3dd28b77cf72546e255f392e3c5f3dd8549dfb5f97be9fd956d718321d6d",
+          "sha256": "cb324767e048d6e2434c1b1f679a614fac76157dbd257c8395f73bd9e0a37cae",
           "anchor": "{"
         },
         {
@@ -1654,7 +1654,7 @@
         {
           "path": "package.json",
           "line": 1,
-          "sha256": "218d3dd28b77cf72546e255f392e3c5f3dd8549dfb5f97be9fd956d718321d6d",
+          "sha256": "cb324767e048d6e2434c1b1f679a614fac76157dbd257c8395f73bd9e0a37cae",
           "anchor": "{"
         },
         {
@@ -2163,8 +2163,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2379,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2414,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -2385,9 +2385,9 @@
         },
         {
           "path": "apps/cli/src/device-login.ts",
-          "line": 6,
-          "sha256": "155ed74a153a5156c119b68dc4abd489e1a80c172ac3edfb0c6b87aa57a64dfe",
-          "anchor": "export async function browserDeviceLogin(apiUrl: string, scopes: string[] | undefined, runtime: CliRuntime): Promise<void> {"
+          "line": 7,
+          "sha256": "5baad37e3ad436a5804208e177126be4670de4b7162720974c839a303557f829",
+          "anchor": "export async function browserDeviceLogin(apiUrl: string, scopes: string[] | undefined, runtime: CliRuntime, noResume = false): Promise<void> {"
         }
       ],
       "checks": [
@@ -2401,8 +2401,8 @@
         },
         {
           "path": "apps/api/test/device-login-cli.e2e.test.ts",
-          "line": 14,
-          "sha256": "6f744520310f0e4a06b41ea32727be437e703fe481404b3e18f44317ea144f4e",
+          "line": 21,
+          "sha256": "064fc1c7f5a76220a860d64a3ba8d626e13f948e07d79f96d014d088ec392fbc",
           "anchor": "test(\"real CLI browser login polls the real HTTP API and stores only the authorized scoped credential\", { timeout: 25_000 }, async (t) => {",
           "command": "node --import tsx --test apps/api/test/device-login-cli.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -2472,7 +2472,7 @@
         {
           "path": "docs/AUTH_STRATEGY.md",
           "line": 6,
-          "sha256": "788a5e3066a51b3e51fff2e66d26b96c6f87594deab5b3b3589b550ecc0e8730",
+          "sha256": "e20347717b8cad54827d6aed0deba459017d65d1adba452e9ee69f9fd177f473",
           "anchor": "## Direction"
         }
       ],
@@ -2535,8 +2535,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2370,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2405,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -2665,13 +2665,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 231,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- Use [Operational Beta Delivery](OPERATIONAL_BETA_DELIVERY.md) for the accepted operational baseline and define acceptance for each new delivery slice. [BETA_RELEASE_GOAL.md](BETA_RELEASE_GOAL.md) records the historical"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 632,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Milestone 9: Business-Safe Production Release"
         },
         {
@@ -3134,7 +3134,7 @@
         {
           "path": "docs/AUTH_STRATEGY.md",
           "line": 6,
-          "sha256": "788a5e3066a51b3e51fff2e66d26b96c6f87594deab5b3b3589b550ecc0e8730",
+          "sha256": "e20347717b8cad54827d6aed0deba459017d65d1adba452e9ee69f9fd177f473",
           "anchor": "## Direction"
         }
       ],
@@ -3425,7 +3425,7 @@
         {
           "path": "docs/AUTH_STRATEGY.md",
           "line": 6,
-          "sha256": "788a5e3066a51b3e51fff2e66d26b96c6f87594deab5b3b3589b550ecc0e8730",
+          "sha256": "e20347717b8cad54827d6aed0deba459017d65d1adba452e9ee69f9fd177f473",
           "anchor": "## Direction"
         }
       ],
@@ -3663,8 +3663,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2379,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2414,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -3702,8 +3702,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 179,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 180,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "text(): Promise<string>;"
         }
       ],
@@ -3942,8 +3942,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2370,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2405,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -4050,8 +4050,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2379,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2414,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4083,14 +4083,14 @@
       "sources": [
         {
           "path": "apps/cli/src/device-login.ts",
-          "line": 6,
-          "sha256": "155ed74a153a5156c119b68dc4abd489e1a80c172ac3edfb0c6b87aa57a64dfe",
-          "anchor": "export async function browserDeviceLogin(apiUrl: string, scopes: string[] | undefined, runtime: CliRuntime): Promise<void> {"
+          "line": 7,
+          "sha256": "5baad37e3ad436a5804208e177126be4670de4b7162720974c839a303557f829",
+          "anchor": "export async function browserDeviceLogin(apiUrl: string, scopes: string[] | undefined, runtime: CliRuntime, noResume = false): Promise<void> {"
         },
         {
           "path": "apps/cli/src/token-store.ts",
           "line": 14,
-          "sha256": "f942c69d812998ffbc28fd4a1ab1f277fd8cfc6d3291ebf51ca3755f1b30aca1",
+          "sha256": "af8e6f5384316a033d2ba7085a2a142df247d195b3d704cdfc029b110f08a28c",
           "anchor": "export function createTokenStore(env: Record<string, string | undefined> = process.env, namespace?: string): CliTokenStore {"
         },
         {
@@ -4125,8 +4125,8 @@
         },
         {
           "path": "apps/api/test/device-login-cli.e2e.test.ts",
-          "line": 14,
-          "sha256": "6f744520310f0e4a06b41ea32727be437e703fe481404b3e18f44317ea144f4e",
+          "line": 21,
+          "sha256": "064fc1c7f5a76220a860d64a3ba8d626e13f948e07d79f96d014d088ec392fbc",
           "anchor": "test(\"real CLI browser login polls the real HTTP API and stores only the authorized scoped credential\", { timeout: 25_000 }, async (t) => {",
           "command": "node --import tsx --test apps/api/test/device-login-cli.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4193,8 +4193,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2379,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2414,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4226,8 +4226,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 214,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 218,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -4259,8 +4259,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2379,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2414,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -5116,13 +5116,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 334,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- The four-wave application redesign shipped in beta.12, followed by local MFA"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 1,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "# Roadmap"
         },
         {
@@ -5153,13 +5153,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 336,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- Unified Skills browsing/management, Library entry selection and a full-page"
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 411,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Milestone 7A: Skill Architecture Control Plane MVE"
         },
         {
@@ -6602,7 +6602,7 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 402,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- Stdio and stateless Streamable HTTP MCP servers expose registry discovery and architecture metadata tools. SDK v2.1 entrypoints support both legacy clients and protocol `2026-07-28`; required CI and protocol tests pass"
         },
         {
@@ -6655,7 +6655,7 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 403,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- The API-owned MCP session check accepts an API token with either `skills:read` or `architectures:read`; registry tools require `skills:read`, architecture projection tools require `architectures:read`, session tokens a"
         },
         {
@@ -7540,8 +7540,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 1553,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 1588,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertCodexObservationOptions(parsed, healthOnly);"
         },
         {
@@ -7702,8 +7702,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2832,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2867,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "preflightScopeEnrollment(initialState, provider, scope, location.path);"
         },
         {
@@ -8228,8 +8228,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2049,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2084,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertLibraryVersion(libraryResolution, version);"
         },
         {
@@ -8462,8 +8462,8 @@
       "sources": [
         {
           "path": "docs/RELEASE.md",
-          "line": 324,
-          "sha256": "33ecc868ddd1856a4e9c09c5909f8cf4f65306abed04efe3ae311165bf4e2a63",
+          "line": 341,
+          "sha256": "63e2667c8fb812d5e5317ec14e678535e8793cc6f5af5c9f13dd3f709546d8a7",
           "anchor": "### Libraries beta.8 compatibility boundary"
         },
         {
@@ -8508,7 +8508,7 @@
         {
           "path": "docs/RELEASE.md",
           "line": 1,
-          "sha256": "33ecc868ddd1856a4e9c09c5909f8cf4f65306abed04efe3ae311165bf4e2a63",
+          "sha256": "63e2667c8fb812d5e5317ec14e678535e8793cc6f5af5c9f13dd3f709546d8a7",
           "anchor": "# Release Process"
         },
         {
@@ -8592,7 +8592,7 @@
         {
           "path": "package.json",
           "line": 1,
-          "sha256": "218d3dd28b77cf72546e255f392e3c5f3dd8549dfb5f97be9fd956d718321d6d",
+          "sha256": "cb324767e048d6e2434c1b1f679a614fac76157dbd257c8395f73bd9e0a37cae",
           "anchor": "{"
         },
         {
@@ -8685,13 +8685,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 611,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- First public release tag is reproducible."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 7,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Release Tracks"
         },
         {
@@ -8722,13 +8722,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 617,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- Responsible public-alpha docs archived alongside the current beta goal."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 7,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Release Tracks"
         },
         {
@@ -8951,7 +8951,7 @@
         {
           "path": "package.json",
           "line": 1,
-          "sha256": "218d3dd28b77cf72546e255f392e3c5f3dd8549dfb5f97be9fd956d718321d6d",
+          "sha256": "cb324767e048d6e2434c1b1f679a614fac76157dbd257c8395f73bd9e0a37cae",
           "anchor": "{"
         }
       ],
@@ -9004,7 +9004,7 @@
         {
           "path": "package.json",
           "line": 1,
-          "sha256": "218d3dd28b77cf72546e255f392e3c5f3dd8549dfb5f97be9fd956d718321d6d",
+          "sha256": "cb324767e048d6e2434c1b1f679a614fac76157dbd257c8395f73bd9e0a37cae",
           "anchor": "{"
         }
       ],
@@ -9045,7 +9045,7 @@
         {
           "path": "package.json",
           "line": 1,
-          "sha256": "218d3dd28b77cf72546e255f392e3c5f3dd8549dfb5f97be9fd956d718321d6d",
+          "sha256": "cb324767e048d6e2434c1b1f679a614fac76157dbd257c8395f73bd9e0a37cae",
           "anchor": "{"
         },
         {
@@ -9075,8 +9075,8 @@
       "sources": [
         {
           "path": "docs/RELEASE.md",
-          "line": 48,
-          "sha256": "33ecc868ddd1856a4e9c09c5909f8cf4f65306abed04efe3ae311165bf4e2a63",
+          "line": 65,
+          "sha256": "63e2667c8fb812d5e5317ec14e678535e8793cc6f5af5c9f13dd3f709546d8a7",
           "anchor": "## Beta.17 release record"
         },
         {
@@ -9121,13 +9121,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 625,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- Public visibility switch."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 7,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Release Tracks"
         },
         {
@@ -9158,13 +9158,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 626,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- First reproducible beta tag."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 7,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Release Tracks"
         },
         {
@@ -9195,13 +9195,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 627,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- Release artifact verification from the public beta tag."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 7,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Release Tracks"
         },
         {
@@ -9232,13 +9232,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 628,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- Fresh-clone local and staging/user-test rehearsal against the immutable beta.2 release commit."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 546,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Milestone 7E: Pattern migration and editor history"
         },
         {
@@ -9268,8 +9268,8 @@
       "sources": [
         {
           "path": "docs/RELEASE.md",
-          "line": 316,
-          "sha256": "33ecc868ddd1856a4e9c09c5909f8cf4f65306abed04efe3ae311165bf4e2a63",
+          "line": 333,
+          "sha256": "63e2667c8fb812d5e5317ec14e678535e8793cc6f5af5c9f13dd3f709546d8a7",
           "anchor": "## Production Promotion"
         },
         {
@@ -9313,8 +9313,8 @@
       "sources": [
         {
           "path": "docs/RELEASE.md",
-          "line": 316,
-          "sha256": "33ecc868ddd1856a4e9c09c5909f8cf4f65306abed04efe3ae311165bf4e2a63",
+          "line": 333,
+          "sha256": "63e2667c8fb812d5e5317ec14e678535e8793cc6f5af5c9f13dd3f709546d8a7",
           "anchor": "## Production Promotion"
         },
         {
@@ -9365,7 +9365,7 @@
         {
           "path": "docs/AUTH_STRATEGY.md",
           "line": 6,
-          "sha256": "788a5e3066a51b3e51fff2e66d26b96c6f87594deab5b3b3589b550ecc0e8730",
+          "sha256": "e20347717b8cad54827d6aed0deba459017d65d1adba452e9ee69f9fd177f473",
           "anchor": "## Direction"
         }
       ],
@@ -9578,9 +9578,9 @@
         },
         {
           "path": "apps/cli/src/device-login.ts",
-          "line": 6,
-          "sha256": "155ed74a153a5156c119b68dc4abd489e1a80c172ac3edfb0c6b87aa57a64dfe",
-          "anchor": "export async function browserDeviceLogin(apiUrl: string, scopes: string[] | undefined, runtime: CliRuntime): Promise<void> {"
+          "line": 7,
+          "sha256": "5baad37e3ad436a5804208e177126be4670de4b7162720974c839a303557f829",
+          "anchor": "export async function browserDeviceLogin(apiUrl: string, scopes: string[] | undefined, runtime: CliRuntime, noResume = false): Promise<void> {"
         }
       ],
       "checks": [
@@ -9594,8 +9594,8 @@
         },
         {
           "path": "apps/api/test/device-login-cli.e2e.test.ts",
-          "line": 14,
-          "sha256": "6f744520310f0e4a06b41ea32727be437e703fe481404b3e18f44317ea144f4e",
+          "line": 21,
+          "sha256": "064fc1c7f5a76220a860d64a3ba8d626e13f948e07d79f96d014d088ec392fbc",
           "anchor": "test(\"real CLI browser login polls the real HTTP API and stores only the authorized scoped credential\", { timeout: 25_000 }, async (t) => {",
           "command": "node --import tsx --test apps/api/test/device-login-cli.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -9650,8 +9650,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2370,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2405,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -9734,8 +9734,8 @@
       "sources": [
         {
           "path": "docs/RELEASE.md",
-          "line": 84,
-          "sha256": "33ecc868ddd1856a4e9c09c5909f8cf4f65306abed04efe3ae311165bf4e2a63",
+          "line": 101,
+          "sha256": "63e2667c8fb812d5e5317ec14e678535e8793cc6f5af5c9f13dd3f709546d8a7",
           "anchor": "## Beta.14 release record"
         },
         {
@@ -10021,13 +10021,13 @@
         {
           "path": "docs/ROADMAP.md",
           "line": 665,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "- The repository is public as `jremick/myskills`."
         },
         {
           "path": "docs/ROADMAP.md",
           "line": 7,
-          "sha256": "499bf778bf66335f24d5b8d327a5679635db4a3d9fff7599a7dc4112c6b9aee3",
+          "sha256": "b322adc13a10e69c7c75291bdcbddab628b9278537d16cf9eff07f39f645cec1",
           "anchor": "## Release Tracks"
         },
         {
@@ -13413,7 +13413,7 @@
         {
           "path": "docs/AUTH_STRATEGY.md",
           "line": 54,
-          "sha256": "788a5e3066a51b3e51fff2e66d26b96c6f87594deab5b3b3589b550ecc0e8730",
+          "sha256": "e20347717b8cad54827d6aed0deba459017d65d1adba452e9ee69f9fd177f473",
           "anchor": "## Public Auth Notification Outbox"
         }
       ],
@@ -13614,8 +13614,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 214,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 218,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -13702,7 +13702,7 @@
         {
           "path": "docs/RELEASE.md",
           "line": 1,
-          "sha256": "33ecc868ddd1856a4e9c09c5909f8cf4f65306abed04efe3ae311165bf4e2a63",
+          "sha256": "63e2667c8fb812d5e5317ec14e678535e8793cc6f5af5c9f13dd3f709546d8a7",
           "anchor": "# Release Process"
         },
         {
@@ -13798,7 +13798,7 @@
         {
           "path": "docs/AUTH_STRATEGY.md",
           "line": 6,
-          "sha256": "788a5e3066a51b3e51fff2e66d26b96c6f87594deab5b3b3589b550ecc0e8730",
+          "sha256": "e20347717b8cad54827d6aed0deba459017d65d1adba452e9ee69f9fd177f473",
           "anchor": "## Direction"
         }
       ],
@@ -14634,9 +14634,9 @@
         },
         {
           "path": "apps/cli/src/device-login.ts",
-          "line": 6,
-          "sha256": "155ed74a153a5156c119b68dc4abd489e1a80c172ac3edfb0c6b87aa57a64dfe",
-          "anchor": "export async function browserDeviceLogin(apiUrl: string, scopes: string[] | undefined, runtime: CliRuntime): Promise<void> {"
+          "line": 7,
+          "sha256": "5baad37e3ad436a5804208e177126be4670de4b7162720974c839a303557f829",
+          "anchor": "export async function browserDeviceLogin(apiUrl: string, scopes: string[] | undefined, runtime: CliRuntime, noResume = false): Promise<void> {"
         }
       ],
       "checks": [
@@ -14650,8 +14650,8 @@
         },
         {
           "path": "apps/api/test/device-login-cli.e2e.test.ts",
-          "line": 14,
-          "sha256": "6f744520310f0e4a06b41ea32727be437e703fe481404b3e18f44317ea144f4e",
+          "line": 21,
+          "sha256": "064fc1c7f5a76220a860d64a3ba8d626e13f948e07d79f96d014d088ec392fbc",
           "anchor": "test(\"real CLI browser login polls the real HTTP API and stores only the authorized scoped credential\", { timeout: 25_000 }, async (t) => {",
           "command": "node --import tsx --test apps/api/test/device-login-cli.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14667,8 +14667,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2370,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2405,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -14712,8 +14712,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 179,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 180,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "text(): Promise<string>;"
         }
       ],
@@ -14745,8 +14745,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2379,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2414,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         },
         {
@@ -14912,7 +14912,7 @@
         {
           "path": "docs/RELEASE.md",
           "line": 1,
-          "sha256": "33ecc868ddd1856a4e9c09c5909f8cf4f65306abed04efe3ae311165bf4e2a63",
+          "sha256": "63e2667c8fb812d5e5317ec14e678535e8793cc6f5af5c9f13dd3f709546d8a7",
           "anchor": "# Release Process"
         },
         {
@@ -14956,8 +14956,8 @@
       "sources": [
         {
           "path": "docs/RELEASE.md",
-          "line": 48,
-          "sha256": "33ecc868ddd1856a4e9c09c5909f8cf4f65306abed04efe3ae311165bf4e2a63",
+          "line": 65,
+          "sha256": "63e2667c8fb812d5e5317ec14e678535e8793cc6f5af5c9f13dd3f709546d8a7",
           "anchor": "## Beta.17 release record"
         },
         {
@@ -15272,7 +15272,7 @@
         {
           "path": "package.json",
           "line": 1,
-          "sha256": "218d3dd28b77cf72546e255f392e3c5f3dd8549dfb5f97be9fd956d718321d6d",
+          "sha256": "cb324767e048d6e2434c1b1f679a614fac76157dbd257c8395f73bd9e0a37cae",
           "anchor": "{"
         },
         {
@@ -15488,8 +15488,8 @@
       "sources": [
         {
           "path": "docs/RELEASE.md",
-          "line": 64,
-          "sha256": "33ecc868ddd1856a4e9c09c5909f8cf4f65306abed04efe3ae311165bf4e2a63",
+          "line": 81,
+          "sha256": "63e2667c8fb812d5e5317ec14e678535e8793cc6f5af5c9f13dd3f709546d8a7",
           "anchor": "## Beta.16 release record"
         },
         {
@@ -16077,8 +16077,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 214,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 218,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -18847,8 +18847,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2483,
-          "sha256": "6952d338ee710f8ade18d6dd6cfb90d816b83dbbbd2db578d4342a5c5b456f5c",
+          "line": 2518,
+          "sha256": "a8228c10bd02e7b4127b9d27c3524ee8abaf832da01ff275e031ff34611e0537",
           "anchor": "assertMatchingProvenance(binding,provenance);"
         }
       ],
@@ -19730,7 +19730,7 @@
         {
           "path": "package.json",
           "line": 1,
-          "sha256": "218d3dd28b77cf72546e255f392e3c5f3dd8549dfb5f97be9fd956d718321d6d",
+          "sha256": "cb324767e048d6e2434c1b1f679a614fac76157dbd257c8395f73bd9e0a37cae",
           "anchor": "{"
         },
         {

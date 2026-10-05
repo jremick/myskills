@@ -1,6 +1,6 @@
 # Roadmap
 
-Version: 0.1.0-beta.19
+Version: 0.1.0-beta.20
 Document revision: 0.3.10
 Last updated: 2026-10-02
 

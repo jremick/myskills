@@ -6,6 +6,7 @@ import { prepareLocalArchitectureArtifact, applyLocalArchitectureArtifact, verif
 import { artifactHash, type ArchitectureArtifactIntent } from "@myskills-app/core";
 import { ConfigurationProfileError, selectConfigurationProfile } from "./configuration-profile.js";
 import { browserDeviceLogin } from "./device-login.js";
+import { DeviceLoginError, type CliDeviceLoginStore } from "./device-login-store.js";
 import { readBoundedResponse, decodeResponseUtf8, MAX_PACKAGE_RESPONSE_BYTES } from "./bounded-response.js";
 import { bundleRequest } from "@myskills-app/core";
 import { authorDraftHelp, authorDraftApiErrorCodes, runAuthorDraftCommand } from "./author-draft-commands.js";
@@ -185,7 +186,10 @@ export interface CliRuntime {
   fetch: FetchLike;
   configStore?: CliConfigStore;
   /** Production stores are opened only after selecting the configuration profile. */
-  createStores?: (env: Record<string, string | undefined>, namespace?: string) => { configStore: CliConfigStore; tokenStore: CliTokenStore };
+  createStores?: (env: Record<string, string | undefined>, namespace?: string) => { configStore: CliConfigStore; tokenStore: CliTokenStore; deviceLoginStore?: CliDeviceLoginStore };
+  deviceLoginStore?: CliDeviceLoginStore;
+  /** Test-only cancellation/time seam for bounded device polling. */
+  deviceLogin?: { signal?: AbortSignal; now?: () => number; sleep?: (milliseconds: number, signal: AbortSignal) => Promise<void> };
   configProfile?: string;
   /** Test-only state seam; production uses the shared OS-user enrollment directory. */
   workspaceEnrollmentStateDirectory?: string;
@@ -754,8 +758,8 @@ async function loginCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<nu
   parsed.options["api-url"] = apiUrl;
   const method = await loginAuthMethod(parsed, runtime);
   if (method === "browser") {
-    try { await browserDeviceLogin(apiUrl, optionalStringOption(parsed, "scopes")?.split(",").map((scope) => scope.trim()), runtime); }
-    catch (error) { throw new CliError(error instanceof Error ? error.message : "Browser login failed.", 1); }
+    try { await browserDeviceLogin(apiUrl, optionalStringOption(parsed, "scopes")?.split(",").map((scope) => scope.trim()), runtime, parsed.options["no-resume"] === true); }
+    catch (error) { throw new CliError(error instanceof DeviceLoginError ? error.message : "Browser login failed.", 1, error instanceof DeviceLoginError ? error.code : "DEVICE_LOGIN_FAILED"); }
     return 0;
   }
   if (method === "api-key") {
@@ -816,6 +820,36 @@ async function completeMfaLogin(loginResponse: Record<string, unknown>, parsed: 
 
 async function logoutCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
   const apiUrl = apiBaseUrl(parsed, runtime);
+  if (runtime.deviceLoginStore) {
+    try { return await runtime.deviceLoginStore.withLock(apiUrl, async () => {
+      let pending: unknown | null = null;
+      let cleanupFailed = false;
+      // Delete without parsing so logout can also repair a corrupt checkpoint.
+      try {
+        pending = await runtime.deviceLoginStore!.get(apiUrl).catch((error) => {
+          if (error instanceof DeviceLoginError && error.code === "DEVICE_LOGIN_STATE_INVALID") return true;
+          throw error;
+        });
+        await runtime.deviceLoginStore!.delete(apiUrl);
+      } catch { cleanupFailed = true; }
+      let result: number;
+      try { result = await logoutCredential(parsed, runtime, pending !== null); }
+      catch (error) {
+        if (cleanupFailed) throw new CliError("Credential logout was attempted, but pending browser login cleanup could not be confirmed. Restore OS keyring access and retry logout; check account settings for remote revocation.", 1, "DEVICE_LOGIN_CLEANUP_FAILED");
+        throw error;
+      }
+      if (cleanupFailed) throw new CliError("Credential logout completed, but pending browser login cleanup could not be confirmed. Restore OS keyring access and retry logout before resuming browser login.", 1, "DEVICE_LOGIN_CLEANUP_FAILED");
+      return result;
+    }); } catch (error) {
+      if (error instanceof DeviceLoginError) throw new CliError(error.message, 1, error.code);
+      throw error;
+    }
+  }
+  return logoutCredential(parsed, runtime, false);
+}
+
+async function logoutCredential(parsed: ParsedArgs, runtime: CliRuntime, removedPending: boolean): Promise<number> {
+  const apiUrl = apiBaseUrl(parsed, runtime);
   let resolved: ResolvedToken | null;
   try { resolved = await resolveToken(parsed, runtime); }
   catch (error) {
@@ -828,6 +862,7 @@ async function logoutCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     throw new CliError("Stored credentials were unreadable. Local cleanup succeeded, but remote revocation could not be confirmed. Revoke the session or API token through the account settings.", 1, "LOGOUT_REMOTE_UNCONFIRMED");
   }
   if (!resolved) {
+    if (removedPending) { runtime.io.stdout("pending browser login removed\tlocal-only"); return 0; }
     throw new CliError("Not logged in. Run myskills login, set MYSKILLS_TOKEN, or pass --token.", 1);
   }
   if (resolved.source === "store" && resolved.stored.kind === "api") {
@@ -6183,6 +6218,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     if (
       key === "json"
       || key === "api-key"
+      || key === "no-resume"
       || key === "health"
       || key === "clear-organizations"
       || key === "dry-run"
@@ -6252,7 +6288,7 @@ function helpText(runtime: CliRuntime): string {
     "  search [query] [--limit <1-100>] [--cursor <cursor>] [--api-url <url>]",
     "  info <skill-slug> [--version <exact-version>] [--api-url <url>]",
     "  login [--api-url <url>] [--method <password|api-key|browser>] [--email <email>]",
-    "  login --method browser [--scopes profile:read,skills:read] (trusted browser consent)",
+    "  login --method browser [--scopes <comma-separated-scopes>] [--no-resume] (repeat to resume before the displayed deadline)",
     "  login --api-key [--api-url <url>]",
     "  logout [--api-url <url>] [--token <token>]",
     "  whoami [--api-url <url>] [--token <token>]",
