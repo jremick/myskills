@@ -17,8 +17,8 @@
     "test": "node ../../scripts/run-node-tests.mjs --import tsx --extensions .test.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/node": "2.1.0",
-    "@modelcontextprotocol/server": "2.1.0",
+    "@modelcontextprotocol/node": "2.1.1",
+    "@modelcontextprotocol/server": "2.3.0",
     "@myskills-app/core": "0.1.0-beta.20",
     "@myskills-app/skill-package": "0.1.0-beta.20",
     "yaml": "2.9.1",
