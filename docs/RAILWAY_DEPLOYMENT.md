@@ -529,3 +529,21 @@ The current live project is intentionally manual but can be made easier without 
 6. Complete staging's real browser/CLI journey before production. After production promotion, verify HTML revalidation in an existing browser cache, existing-session auth, authorized private package delivery, anonymous denial, rendered package text and navigation, and recent logs. Use a fresh context for anonymous checks and preserve existing user sessions during verification. Use read requests for production checks; package access still writes its normal audit events.
 
 Release verification (`scripts/local-ci.sh release-check`, and the tag workflow while it remains) is intentionally verification-only and does not deploy Railway. Follow the staging, production approval, and rollback boundary in [Release Process](RELEASE.md). Any future deploy automation must use scoped project credentials, preserve a separate staging/user-test step, require explicit production approval, deploy API and web from the same commit in API-ready-then-web order, and report resulting deployment IDs plus direct and same-origin health/browser readback.
+
+## Config as code and shutdown
+
+`deploy/railway/api.json`, `deploy/railway/web.json` and `deploy/railway/mcp.json`
+declare each service's Dockerfile, healthcheck (api `/ready`, web `/health`,
+300-second timeout), `ON_FAILURE` restart policy (10 retries) and a 30-second
+drain window. They take effect only after a service's **Config-as-code path** in
+Railway is set to the file. There is deliberately no root `railway.json`, because
+it would apply to every service, including Postgres-adjacent and backup services.
+
+On SIGTERM/SIGINT the API logs the signal, stops its workers, closes Fastify and
+the Postgres pool, logs the exit code and exits 0. It exits 1 if draining fails
+or exceeds `SHUTDOWN_TIMEOUT_MS` (default 25000), instead of waiting for SIGKILL.
+
+Cost candidates (Railway-side decisions, not code changes): the `beta2-staging`
+`mcp` and `mailpit` services are candidates for Serverless sleep or removal, and
+staging `api`/`web` can use Serverless sleep when a cold start is acceptable. Keep
+production `api` and `web` always on.
