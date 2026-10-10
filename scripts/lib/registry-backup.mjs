@@ -231,7 +231,8 @@ export async function runRegistryBackup(env = process.env, dependencies = {}) {
           const deletedSets = await pruneCompletedSets(backupS3, config, retentionCandidates(sets, config, runId), lockSignal);
           return { schemaVersion: 1, passed: true, runId, startedAt, completedAt: completed.marker.completedAt,
             elapsedSeconds: Math.ceil((Date.now() - Date.parse(startedAt)) / 1000), ...snapshotStatus(manifest),
-            manifestSha256: completed.marker.manifest.sha256, deletedSets, retentionDays: config.retentionDays };
+            manifestSha256: completed.marker.manifest.sha256, destinationKey: `${runPrefix(config, runId)}manifest.json`,
+            deletedSets, retentionDays: config.retentionDays };
         });
       } finally { sourceS3.destroy(); backupS3.destroy(); }
     });
@@ -289,4 +290,21 @@ export async function restoreRegistryBackup(env = process.env, runId, dependenci
     await writeFile(join(recoveryRoot, "failure.json"), `${JSON.stringify({ ...report, ...destinations })}\n`, { flag: "wx", mode: 0o600 });
     return { report, recoveryRoot };
   }
+}
+
+/**
+ * One log line per backup run. Railway renders JSON log lines by their
+ * `message`/`level` fields, so a bare report shows as an empty info line;
+ * this gives every run a readable success or error line.
+ */
+export function formatBackupLogLine(report) {
+  if (report?.passed === true) {
+    const totalBytes = (report.databaseDumpBytes ?? 0) + (report.artifactBytes ?? 0);
+    const message = report.destinationKey
+      ? `Registry backup succeeded: ${totalBytes} bytes (database ${report.databaseDumpBytes ?? 0}, artifacts ${report.artifactBytes ?? 0}), manifest sha256 ${report.manifestSha256}, destination ${report.destinationKey}`
+      : `Registry backup check passed: ${report.reason ?? "ok"}`;
+    return { stream: "stdout", line: JSON.stringify({ level: "info", message, ...report }) };
+  }
+  const reason = report?.failedPhase ?? report?.reason ?? "unknown";
+  return { stream: "stderr", line: JSON.stringify({ level: "error", message: `Registry backup FAILED (${reason}); see docs/BACKUPS.md`, ...report }) };
 }

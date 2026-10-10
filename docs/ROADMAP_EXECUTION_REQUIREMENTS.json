@@ -2273,7 +2273,7 @@
         "sources": [
           {
             "path": "apps/api/src/app.ts",
-            "line": 121
+            "line": 122
           },
           {
             "path": "apps/api/src/db/seed.ts",
@@ -2348,7 +2348,7 @@
         "sources": [
           {
             "path": "apps/api/src/app.ts",
-            "line": 362
+            "line": 378
           },
           {
             "path": "apps/api/src/db/seed.ts",
@@ -2490,7 +2490,7 @@
         "sources": [
           {
             "path": "apps/api/src/app.ts",
-            "line": 121
+            "line": 122
           },
           {
             "path": "apps/api/src/db/seed.ts",
@@ -2640,7 +2640,7 @@
         "sources": [
           {
             "path": "apps/api/src/app.ts",
-            "line": 941
+            "line": 957
           },
           {
             "path": "apps/api/src/db/seed.ts",
@@ -3769,7 +3769,7 @@
         "sources": [
           {
             "path": "scripts/lib/registry-backup.mjs",
-            "line": 260
+            "line": 261
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -3783,7 +3783,7 @@
         "checks": [
           {
             "path": "scripts/test/registry-backup.test.mjs",
-            "line": 316,
+            "line": 317,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/registry-backup.test.mjs"
           },
@@ -15388,7 +15388,7 @@
         "sources": [
           {
             "path": "scripts/lib/registry-backup.mjs",
-            "line": 260
+            "line": 261
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -15402,7 +15402,7 @@
         "checks": [
           {
             "path": "scripts/test/registry-backup.test.mjs",
-            "line": 160,
+            "line": 161,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/registry-backup.test.mjs"
           },
@@ -21471,7 +21471,7 @@
         "sources": [
           {
             "path": "scripts/lib/registry-backup.mjs",
-            "line": 260
+            "line": 261
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -21485,7 +21485,7 @@
         "checks": [
           {
             "path": "scripts/test/registry-backup.test.mjs",
-            "line": 160,
+            "line": 161,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/registry-backup.test.mjs"
           },
@@ -23091,7 +23091,7 @@
         "checks": [
           {
             "path": "scripts/test/registry-backup.test.mjs",
-            "line": 316,
+            "line": 317,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/registry-backup.test.mjs"
           },
@@ -23148,7 +23148,7 @@
         "sources": [
           {
             "path": "scripts/lib/registry-backup.mjs",
-            "line": 260
+            "line": 261
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -23162,7 +23162,7 @@
         "checks": [
           {
             "path": "scripts/test/registry-backup.test.mjs",
-            "line": 284,
+            "line": 285,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/registry-backup.test.mjs"
           },
@@ -29923,7 +29923,7 @@
         "checks": [
           {
             "path": "scripts/test/registry-backup.test.mjs",
-            "line": 367,
+            "line": 368,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/registry-backup.test.mjs"
           },

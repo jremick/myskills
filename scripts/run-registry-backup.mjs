@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { backupConfiguration, registryBackupStatus, runRegistryBackup } from "./lib/registry-backup.mjs";
+import { backupConfiguration, formatBackupLogLine, registryBackupStatus, runRegistryBackup } from "./lib/registry-backup.mjs";
 import { armProcessDeadline } from "./lib/registry-recovery.mjs";
 
 const args = process.argv.slice(2);
@@ -18,8 +18,9 @@ try {
       // Last resort if a third-party handle ignores cancellation. Railway does not kill stuck cron jobs.
       armProcessDeadline(deadline);
       const report = args[0] === "--status" ? await registryBackupStatus() : await runRegistryBackup();
-      console.log(JSON.stringify(report));
+      const { stream, line } = formatBackupLogLine(report);
+      if (stream === "stderr") console.error(line); else console.log(line);
       process.exitCode = report.passed ? 0 : 1;
     }
   }
-} catch { console.error(JSON.stringify({ passed: false, failedPhase: "configuration-or-backup", guidance: "See docs/BACKUPS.md; raw provider errors are withheld." })); process.exitCode = 1; }
+} catch { console.error(formatBackupLogLine({ passed: false, failedPhase: "configuration-or-backup", guidance: "See docs/BACKUPS.md; raw provider errors are withheld." }).line); process.exitCode = 1; }

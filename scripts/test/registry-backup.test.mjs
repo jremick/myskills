@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
 import { promisify } from "node:util";
-import { backupConfiguration, loadCompletedSet, publishBackup, registryBackupStatus, restoreRegistryBackup,
+import { backupConfiguration, formatBackupLogLine, loadCompletedSet, publishBackup, registryBackupStatus, restoreRegistryBackup,
   retentionCandidates, runPrefix, runRegistryBackup, validateManifest, withBackupLock } from "../lib/registry-backup.mjs";
 import { captureSnapshot, createRecoveryDirectory, readObject, sha256, withDeadline } from "../lib/registry-recovery.mjs";
 import { recoveryConfiguration, rehearseRegistryRecovery } from "../rehearse-registry-recovery.mjs";
@@ -155,6 +155,7 @@ test("one snapshot includes object and inline bytes; source SQL never mutates ap
   const backup = new FakeStorage(); const deps = dependencies(backup);
   const report = await runRegistryBackup(env(await directory(t)), deps);
   assert.equal(report.passed, true); assert.equal(report.artifactCount, 2); assert.equal(report.objectBackedCount, 1); assert.equal(report.sourceWrites, false);
+  assert.match(report.destinationKey, new RegExp(`${report.runId}/manifest\\.json$`));
   assert.equal(deps.source.closed, true);
   assert(deps.source.queries.some(({ sql }) => sql === "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"));
   assert(deps.source.queries.every(({ sql }) => /^(SELECT|SET|BEGIN|COMMIT|ROLLBACK)/.test(sql.trim())));
@@ -421,4 +422,33 @@ test("legacy rehearsal retains destination identities when database restore fail
   assert.equal(failure.destinationBucket, destinations.destinationBucket);
   assert.equal(failure.failedPhase, "restore-database");
   assert.equal(JSON.stringify(failure).includes("fixture-provider-detail"), false);
+});
+
+test("backup log lines are readable on Railway: success with size, checksum and destination; failure on stderr", () => {
+  const success = formatBackupLogLine({ passed: true, runId: "r", databaseDumpBytes: 100, artifactBytes: 23,
+    manifestSha256: "a".repeat(64), destinationKey: "myskills/r/manifest.json" });
+  assert.equal(success.stream, "stdout");
+  const parsedSuccess = JSON.parse(success.line);
+  assert.equal(parsedSuccess.level, "info");
+  assert.match(parsedSuccess.message, /^Registry backup succeeded: 123 bytes/);
+  assert.match(parsedSuccess.message, new RegExp(`sha256 ${"a".repeat(64)}`));
+  assert.match(parsedSuccess.message, /destination myskills\/r\/manifest\.json$/);
+  const failure = formatBackupLogLine({ passed: false, failedPhase: "upload-and-verify", sourceWrites: false });
+  assert.equal(failure.stream, "stderr");
+  const parsedFailure = JSON.parse(failure.line);
+  assert.equal(parsedFailure.level, "error");
+  assert.match(parsedFailure.message, /FAILED \(upload-and-verify\)/);
+  assert.equal(parsedFailure.passed, false);
+});
+
+test("backup CLI exits non-zero with an error line when configuration is missing", async () => {
+  const run = promisify(execFile);
+  await assert.rejects(run(process.execPath, [join(import.meta.dirname, "..", "run-registry-backup.mjs"), "--execute"], { env: { PATH: process.env.PATH } }),
+    (error) => {
+      assert.equal(error.code, 1);
+      const line = JSON.parse(error.stderr.trim());
+      assert.equal(line.level, "error");
+      assert.match(line.message, /Registry backup FAILED/);
+      return true;
+    });
 });

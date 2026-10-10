@@ -547,3 +547,19 @@ Cost candidates (Railway-side decisions, not code changes): the `beta2-staging`
 `mcp` and `mailpit` services are candidates for Serverless sleep or removal, and
 staging `api`/`web` can use Serverless sleep when a cold start is acceptable. Keep
 production `api` and `web` always on.
+
+## Request logging and backup log lines
+
+The API no longer logs two lines for every request (Fastify's default). After
+each response it logs **every 5xx** (`level: error`) and **every request slower
+than `API_REQUEST_LOG_SLOW_MS`** (default 1000, `level: warn`). Other requests are
+sampled at `API_REQUEST_LOG_SAMPLE_RATE` (default 0.01). `/health` and `/ready`
+probes are not sampled. `API_REQUEST_LOG_MODE=all` restores a line for every
+request; `errors` logs only errors and slow requests. This keeps the API under
+Railway's per-deployment log rate limit, which dropped 194 lines on 10 September.
+
+The registry backup prints one JSON line with `level` and `message`; Railway
+shows the `message` field. A successful run reads `Registry backup succeeded:
+<bytes> bytes (...), manifest sha256 <hex>, destination <prefix>/manifest.json`.
+Any failure writes a `level: error` line, `Registry backup FAILED (<phase>)`, to
+stderr and exits 1, so the cron run shows as failed.
