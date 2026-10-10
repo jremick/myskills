@@ -268,13 +268,35 @@ const shutdown = () => shutdownPromise ??= (async () => {
   await pool.end();
 })();
 
-process.on("SIGINT", () => {
-  void shutdown().then(() => process.exit(0));
-});
+const shutdownTimeoutMs = Number.parseInt(process.env.SHUTDOWN_TIMEOUT_MS ?? "", 10) > 0
+  ? Number.parseInt(process.env.SHUTDOWN_TIMEOUT_MS ?? "", 10)
+  : 25_000;
 
-process.on("SIGTERM", () => {
-  void shutdown().then(() => process.exit(0));
-});
+// Log the received signal and exit code, and always exit: 0 after a clean
+// drain, 1 if draining fails or exceeds the deadline. Without the deadline a
+// hung drain waits for the platform SIGKILL (exit 137), which Railway reports
+// as a crashed deployment.
+function handleShutdownSignal(signal: NodeJS.Signals): void {
+  app.log.info({ signal }, "MySkills API received shutdown signal");
+  const forceExit = setTimeout(() => {
+    app.log.error({ signal, exitCode: 1, timeoutMs: shutdownTimeoutMs }, "MySkills API shutdown timed out");
+    process.exit(1);
+  }, shutdownTimeoutMs);
+  forceExit.unref();
+  void shutdown().then(
+    () => {
+      app.log.info({ signal, exitCode: 0 }, "MySkills API shutdown complete");
+      process.exit(0);
+    },
+    () => {
+      app.log.error({ signal, exitCode: 1 }, "MySkills API shutdown failed");
+      process.exit(1);
+    },
+  );
+}
+
+process.once("SIGINT", handleShutdownSignal);
+process.once("SIGTERM", handleShutdownSignal);
 
 function allowedOrigins(): string[] {
   const configured = process.env.ALLOWED_WEB_ORIGINS ?? process.env.APP_BASE_URL;
