@@ -7,7 +7,7 @@ Implemented:
 - strict manifest schema and platform variant validation
 - local manifest loading from `skill.json`, `skill-manifest.json`, or `ai-skill.json`
 - local package directory and `.zip` archive scanning
-- local and uploaded `.zip` archive manifest loading and text-entry extraction
+- local and uploaded `.zip` archive manifest loading and text/image extraction
 - normalized text-entry package scanning for API/CLI submission
 - normalized package-file manifest discovery for API submission integrity
 - `readPackageSnapshot(path)` returns the manifest, normalized files, and scan from one bounded read; upload these held files without reading the source again
@@ -26,6 +26,16 @@ Directory, ZIP, and normalized text input share a 1 MiB text budget, 500-file li
 32-component path-depth limit, and strict UTF-8/NUL validation. Directory and ZIP
 walks also cap entries at 1,000; compressed archives are limited to 10 MiB. Readers
 preserve valid UTF-8 bytes, including a text BOM, in the held file contents.
+
+PNG/JPEG/WebP and inert SVG files are validated as images, capped at 1 MiB each
+and 5 MiB total, separately from text. Raster `PackageInputFile.content` is
+canonical base64 in API artifacts; SVG is UTF-8. `packageFileBytes` decodes and
+validates image signatures before filesystem or ZIP output. SVG uses a strict XML
+element/attribute allowlist; active content, CSS and external references are
+rejected. SVG text still passes through the credential/instruction scanner.
+The API serves conventional root `logo.*` or `assets/logo.*` through the existing
+authorized artifact reader; storage and release permissions remain canonical.
+`bytesScanned` records the non-image text budget; image bytes have their own bound.
 
 Planned contents:
 

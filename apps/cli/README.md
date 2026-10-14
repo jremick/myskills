@@ -209,13 +209,24 @@ the source tree. Existing files, directories, symlinks, and symlink ancestors
 are refused. All regular source files are included; there is no ignore file.
 Keep credentials and unrelated files outside the source directory. The package
 limits are 500 files, 1 MiB of text, 1,000 filesystem entries, and a 10 MiB
-archive. Binary files,
-symlinks, and special files are rejected. Text bytes, including BOMs and line
+archive. PNG, JPEG, WebP and inert SVG assets are supported up to 1 MiB each
+and 5 MiB in total. Other binary files, symlinks, and special files are rejected.
+Text bytes, including BOMs and line
 endings, are preserved. Entries use ordinal UTF-8 path order, fixed timestamps
 and permissions, and uncompressed ZIP storage, so source mtimes and locale do
 not change the archive checksum. Empty directories and executable bits are not
 preserved. The archive checksum identifies the ZIP bytes, not the registry's
 package-content digest.
+
+Place the skill logo at `logo.png`, `logo.jpg`, `logo.jpeg`, `logo.webp`, or
+`logo.svg`, or under `assets/` with the same filename. Root logos take precedence.
+The website displays the published release's logo, with its existing tile as a
+fallback. Logos use the release's access rules; private logos are not public.
+JSON package payloads encode raster `content` as canonical base64; SVG and other
+text remain UTF-8. Export/install restore original image bytes. Image signatures
+must match their extensions. SVG supports inert vector elements and local paint
+references only; scripts, event handlers, CSS, external references and embedded
+HTML are rejected. No logo database migration or new storage service is required.
 
 Local authoring requires macOS or Linux. The archive is created with private
 file permissions and exclusive creation; it never overwrites a destination

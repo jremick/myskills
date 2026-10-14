@@ -30,6 +30,7 @@ export interface BundleDetailProps {
   onSave: (bundle: BundleSummary) => void;
   onEdit: (bundle: BundleSummary) => void;
   skillHref: (slug: string) => string;
+  skillLogoUrl?: (slug: string, version: string) => string;
   bundleHref: (id: string) => string;
   onOpenSkill: (slug: string, from: HTMLElement) => void;
   onOpenBundle: (id: string, from: HTMLElement) => void;
@@ -172,7 +173,7 @@ export function BundleDetail(props: BundleDetailProps) {
           <ul className="bundle-detail-members">
             {members.skills.map((member) => (
               <li key={member.skill.slug}>
-                <SkillLink current={false} href={props.skillHref(member.skill.slug)} id={domId("detail-skill", bundle.id, member.skill.slug)} onOpen={(from) => props.onOpenSkill(member.skill.slug, from)} skill={member.skill} />
+                <SkillLink skillLogoUrl={props.skillLogoUrl} current={false} href={props.skillHref(member.skill.slug)} id={domId("detail-skill", bundle.id, member.skill.slug)} onOpen={(from) => props.onOpenSkill(member.skill.slug, from)} skill={member.skill} />
                 <span className="bundle-version">{member.skill.latestVersion ?? "No release"}</span>
                 <OtherBundles bundleHref={props.bundleHref} exclude={bundle.id} memberships={member.memberships} onOpenBundle={props.onOpenBundle} />
               </li>

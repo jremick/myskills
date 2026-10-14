@@ -77,9 +77,12 @@ format: metadata maps string keys to string values, compatibility is a 1–500
 character string, and license and allowed-tools are strings. Unknown reserved
 `io.modelcontextprotocol/` metadata is preserved without interpretation; the
 current official conformance tool reports it as an advisory warning. The adapter
-does not grant permissions from allowed-tools. Package limits retain the registry's 500
-text files and 1 MiB total UTF-8 content; native delivery currently supports text
-packages only. BOM and non-ASCII bytes remain unchanged in resources and digests.
+does not grant permissions from allowed-tools. Package limits retain the registry's
+500 files and 1 MiB total UTF-8 text, plus PNG/JPEG/WebP/SVG assets up to 1 MiB each
+and 5 MiB in total. Raster resources return a base64 `blob` and image MIME type;
+SVG resources return validated text. File digests and byte lengths cover decoded
+bytes. The file-reading tool marks raster `content` with `contentEncoding: "base64"`.
+BOM and non-ASCII bytes remain unchanged in text resources and digests.
 
 Resource identities use this structure:
 

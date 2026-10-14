@@ -2273,7 +2273,7 @@
         "sources": [
           {
             "path": "apps/api/src/app.ts",
-            "line": 121
+            "line": 122
           },
           {
             "path": "apps/api/src/db/seed.ts",
@@ -2348,7 +2348,7 @@
         "sources": [
           {
             "path": "apps/api/src/app.ts",
-            "line": 362
+            "line": 363
           },
           {
             "path": "apps/api/src/db/seed.ts",
@@ -2490,7 +2490,7 @@
         "sources": [
           {
             "path": "apps/api/src/app.ts",
-            "line": 121
+            "line": 122
           },
           {
             "path": "apps/api/src/db/seed.ts",
@@ -2565,7 +2565,7 @@
         "sources": [
           {
             "path": "packages/skill-package/src/package-path.ts",
-            "line": 20
+            "line": 21
           },
           {
             "path": "packages/skill-package/src/scan.ts",
@@ -2577,7 +2577,7 @@
           },
           {
             "path": "packages/skill-package/src/archive.ts",
-            "line": 25
+            "line": 26
           }
         ],
         "checks": [
@@ -2640,7 +2640,7 @@
         "sources": [
           {
             "path": "apps/api/src/app.ts",
-            "line": 941
+            "line": 942
           },
           {
             "path": "apps/api/src/db/seed.ts",
@@ -3359,11 +3359,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 2217
+            "line": 2219
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 873
+            "line": 874
           }
         ],
         "checks": [
@@ -3691,7 +3691,7 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 444
+            "line": 445
           },
           {
             "path": "apps/web/src/components/registry/skill-workspace.ts",
@@ -5566,7 +5566,7 @@
         "sources": [
           {
             "path": "packages/skill-package/src/package-path.ts",
-            "line": 9
+            "line": 10
           },
           {
             "path": "packages/skill-package/src/scan.ts",
@@ -5578,7 +5578,7 @@
           },
           {
             "path": "packages/skill-package/src/archive.ts",
-            "line": 25
+            "line": 26
           }
         ],
         "checks": [
@@ -5708,7 +5708,7 @@
         "sources": [
           {
             "path": "packages/skill-package/src/archive.ts",
-            "line": 21
+            "line": 22
           },
           {
             "path": "apps/cli/src/cli.ts",
@@ -5775,7 +5775,7 @@
         "sources": [
           {
             "path": "packages/skill-package/src/archive.ts",
-            "line": 25
+            "line": 26
           },
           {
             "path": "apps/cli/src/cli.ts",
@@ -6485,7 +6485,7 @@
         "sources": [
           {
             "path": "packages/skill-package/src/package-path.ts",
-            "line": 332
+            "line": 338
           },
           {
             "path": "packages/skill-package/src/scan.ts",
@@ -6497,7 +6497,7 @@
           },
           {
             "path": "packages/skill-package/src/archive.ts",
-            "line": 8
+            "line": 9
           }
         ],
         "checks": [
@@ -6757,7 +6757,7 @@
           },
           {
             "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-            "line": 381
+            "line": 385
           }
         ],
         "checks": [
@@ -6820,11 +6820,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 614
+            "line": 615
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 830
+            "line": 831
           }
         ],
         "checks": [
@@ -6887,11 +6887,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 729
+            "line": 730
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 886
+            "line": 887
           }
         ],
         "checks": [
@@ -6962,7 +6962,7 @@
           },
           {
             "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-            "line": 381
+            "line": 385
           }
         ],
         "checks": [
@@ -7025,7 +7025,7 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 2630
+            "line": 2632
           },
           {
             "path": "apps/web/src/components/registry/SubmissionEvidencePanel.tsx",
@@ -7113,11 +7113,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 254
+            "line": 255
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 860
+            "line": 861
           }
         ],
         "checks": [
@@ -7184,7 +7184,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 254
+            "line": 255
           }
         ],
         "checks": [
@@ -7251,7 +7251,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 858
+            "line": 859
           }
         ],
         "checks": [
@@ -7314,11 +7314,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 444
+            "line": 445
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 860
+            "line": 861
           }
         ],
         "checks": [
@@ -7385,7 +7385,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 563
+            "line": 564
           }
         ],
         "checks": [
@@ -7455,11 +7455,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 903
+            "line": 904
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 830
+            "line": 831
           }
         ],
         "checks": [
@@ -7529,11 +7529,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 4477
+            "line": 4479
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 836
+            "line": 837
           }
         ],
         "checks": [
@@ -7611,7 +7611,7 @@
           },
           {
             "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-            "line": 377
+            "line": 381
           }
         ],
         "checks": [
@@ -7681,7 +7681,7 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 811
+            "line": 812
           },
           {
             "path": "apps/web/src/components/registry/skill-workspace.ts",
@@ -7759,7 +7759,7 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 2630
+            "line": 2632
           },
           {
             "path": "apps/web/src/components/registry/SubmissionEvidencePanel.tsx",
@@ -7854,11 +7854,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 903
+            "line": 904
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 879
+            "line": 880
           }
         ],
         "checks": [
@@ -7928,11 +7928,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 839
+            "line": 840
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 878
+            "line": 879
           }
         ],
         "checks": [
@@ -8002,11 +8002,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 6529
+            "line": 6531
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 862
+            "line": 863
           }
         ],
         "checks": [
@@ -8080,7 +8080,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 595
+            "line": 596
           }
         ],
         "checks": [
@@ -8287,11 +8287,11 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 254
+            "line": 255
           },
           {
             "path": "apps/web/src/api.ts",
-            "line": 885
+            "line": 886
           }
         ],
         "checks": [
@@ -8362,7 +8362,7 @@
           },
           {
             "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-            "line": 381
+            "line": 385
           }
         ],
         "checks": [
@@ -8445,7 +8445,7 @@
           },
           {
             "path": "apps/web/src/components/registry/ReleaseComparison.tsx",
-            "line": 23
+            "line": 24
           }
         ],
         "checks": [
@@ -8885,7 +8885,7 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 2630
+            "line": 2632
           },
           {
             "path": "apps/web/src/components/registry/SubmissionEvidencePanel.tsx",
@@ -9112,7 +9112,7 @@
           },
           {
             "path": "packages/skill-package/src/archive.ts",
-            "line": 8
+            "line": 9
           }
         ],
         "checks": [
@@ -9539,7 +9539,7 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 254
+            "line": 255
           },
           {
             "path": "apps/web/src/components/registry/SubmissionEvidencePanel.tsx",
@@ -17320,7 +17320,7 @@
           },
           {
             "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-            "line": 381
+            "line": 385
           }
         ],
         "checks": [
@@ -17391,7 +17391,7 @@
           },
           {
             "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-            "line": 17
+            "line": 18
           }
         ],
         "checks": [
@@ -17462,7 +17462,7 @@
           },
           {
             "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-            "line": 153
+            "line": 154
           }
         ],
         "checks": [
@@ -17529,7 +17529,7 @@
           },
           {
             "path": "apps/api/src/libraries/packaging.ts",
-            "line": 38
+            "line": 43
           },
           {
             "path": "apps/api/src/libraries/service.ts",
@@ -17608,7 +17608,7 @@
           },
           {
             "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-            "line": 114
+            "line": 115
           }
         ],
         "checks": [
@@ -17675,7 +17675,7 @@
           },
           {
             "path": "apps/api/src/libraries/packaging.ts",
-            "line": 272
+            "line": 287
           },
           {
             "path": "apps/api/src/libraries/service.ts",
@@ -17754,7 +17754,7 @@
           },
           {
             "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-            "line": 381
+            "line": 385
           }
         ],
         "checks": [
@@ -17821,7 +17821,7 @@
           },
           {
             "path": "apps/api/src/libraries/packaging.ts",
-            "line": 832
+            "line": 853
           },
           {
             "path": "apps/api/src/libraries/service.ts",
@@ -17900,7 +17900,7 @@
           },
           {
             "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-            "line": 377
+            "line": 381
           }
         ],
         "checks": [
@@ -22180,7 +22180,7 @@
         "sources": [
           {
             "path": "packages/skill-package/src/package-path.ts",
-            "line": 9
+            "line": 10
           },
           {
             "path": "packages/skill-package/src/scan.ts",
@@ -22192,7 +22192,7 @@
           },
           {
             "path": "packages/skill-package/src/archive.ts",
-            "line": 21
+            "line": 22
           }
         ],
         "checks": [
@@ -22263,7 +22263,7 @@
         "sources": [
           {
             "path": "apps/web/src/components/registry/ReviewComparison.tsx",
-            "line": 8
+            "line": 9
           },
           {
             "path": "packages/skill-package/src/release-comparison.ts",
@@ -22725,7 +22725,7 @@
         "sources": [
           {
             "path": "apps/web/src/App.tsx",
-            "line": 444
+            "line": 445
           },
           {
             "path": "apps/api/src/auth/service.ts",
@@ -22931,7 +22931,7 @@
         "sources": [
           {
             "path": "packages/skill-package/src/archive.ts",
-            "line": 8
+            "line": 9
           },
           {
             "path": "apps/cli/src/cli.ts",
@@ -30960,7 +30960,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 5968
+            "line": 5970
           }
         ],
         "checks": [
@@ -31031,7 +31031,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 5968
+            "line": 5970
           }
         ],
         "checks": [
@@ -31102,7 +31102,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 5968
+            "line": 5970
           }
         ],
         "checks": [
@@ -31173,7 +31173,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 444
+            "line": 445
           }
         ],
         "checks": [
@@ -31244,7 +31244,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 729
+            "line": 730
           }
         ],
         "checks": [
@@ -31315,7 +31315,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 5968
+            "line": 5970
           }
         ],
         "checks": [
@@ -31386,7 +31386,7 @@
           },
           {
             "path": "apps/web/src/App.tsx",
-            "line": 5968
+            "line": 5970
           }
         ],
         "checks": [

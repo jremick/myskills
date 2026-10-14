@@ -5,6 +5,7 @@ import { TextDecoder } from "node:util";
 import yauzl, { type Entry, type ZipFile } from "yauzl";
 import { parseSkillManifest, parseStoredSkillManifest, type SkillManifest } from "./manifest.js";
 import { scanTextForPackageRisks, type ScanFinding } from "./scan.js";
+import { MAX_PACKAGE_IMAGE_BYTES, MAX_PACKAGE_IMAGES_BYTES, packageFileBytes, packageImageType, packageImageFromBytes } from "./assets.js";
 
 export const DEFAULT_MANIFEST_NAMES = ["skill.json", "skill-manifest.json", "ai-skill.json"] as const;
 export const MAX_PACKAGE_FILES = 500;
@@ -122,11 +123,11 @@ async function readPackageFilesOfKind(inputPath: string, directoryOnly: boolean)
       }
       const relativePath = normalizePackageFilePath(path.basename(rootPath));
       validatePortableFilePaths([{ path: relativePath }]);
-      const raw = await readBoundedFile(handle, expected, MAX_PACKAGE_TEXT_BYTES, relativePath);
-      return [{ path: relativePath, content: decodePackageText(raw, relativePath) }];
+      const raw = await readBoundedFile(handle, expected, packageImageType(relativePath) ? MAX_PACKAGE_IMAGE_BYTES : MAX_PACKAGE_TEXT_BYTES, relativePath);
+      return [packageFileFromBytes(raw, relativePath)];
     }
     const files: PackageInputFile[] = [];
-    const budget = { entries: 0, bytes: 0 };
+    const budget = { entries: 0, bytes: 0, images: 0 };
     await readDirectorySnapshot(rootPath, "", handle, expected, files, budget);
     validatePortableFilePaths(files);
     return files.sort((a, b) => a.path.localeCompare(b.path));
@@ -226,7 +227,7 @@ async function readDirectorySnapshot(
   handle: FileHandle,
   expected: BigIntStats,
   files: PackageInputFile[],
-  budget: { entries: number; bytes: number },
+  budget: { entries: number; bytes: number; images: number },
 ): Promise<void> {
   // Linux can resolve each child against the pinned parent descriptor. macOS
   // rejects intermediate symlinks with O_NOFOLLOW_ANY and checks directory identity.
@@ -244,12 +245,16 @@ async function readDirectorySnapshot(
         await readDirectorySnapshot(path.join(directoryPath, entry.name), relativePath, child, childStat, files, budget);
       } else {
         if (files.length >= MAX_PACKAGE_FILES) throw new Error(`Package contains more than ${MAX_PACKAGE_FILES} files.`);
-        if (childStat.size > BigInt(MAX_PACKAGE_TEXT_BYTES - budget.bytes)) {
+        const image = packageImageType(relativePath);
+        const remaining = image ? Math.min(MAX_PACKAGE_IMAGE_BYTES, MAX_PACKAGE_IMAGES_BYTES - budget.images) : MAX_PACKAGE_TEXT_BYTES - budget.bytes;
+        if (image && childStat.size > BigInt(remaining)) throw new Error(`Package image assets exceed their byte limit: ${relativePath}`);
+        if (!image && childStat.size > BigInt(remaining)) {
           throw new PackageTextLimitError(relativePath, budget.bytes + Number(childStat.size), files.length);
         }
-        const raw = await readBoundedFile(child, childStat, MAX_PACKAGE_TEXT_BYTES - budget.bytes, relativePath);
-        budget.bytes += raw.byteLength;
-        files.push({ path: relativePath, content: decodePackageText(raw, relativePath) });
+        const raw = await readBoundedFile(child, childStat, remaining, relativePath);
+        if (image) budget.images += raw.byteLength;
+        else budget.bytes += raw.byteLength;
+        files.push(packageFileFromBytes(raw, relativePath));
       }
     } finally {
       await child.close();
@@ -310,6 +315,7 @@ export function scanPackageFiles(files: PackageInputFile[]): PackageScanResult {
   let validated: PackageFileValidationResult;
   try {
     validated = inspectPackageFiles(files, (file, relativePath) => {
+      if (packageImageType(relativePath) && packageImageType(relativePath) !== "image/svg+xml") return;
       for (const finding of scanTextForPackageRisks(file.content)) {
         findings.push({ ...finding, path: relativePath });
       }
@@ -343,6 +349,7 @@ function inspectPackageFiles(
 
   const seen = new Set<string>();
   let bytesScanned = 0;
+  let imageBytes = 0;
 
   for (const file of files) {
     const relativePath = normalizePackageFilePath(file.path);
@@ -353,6 +360,12 @@ function inspectPackageFiles(
     seen.add(relativePath);
     if (typeof file.content !== "string") {
       throw new Error(`Package file content must be text: ${relativePath}`);
+    }
+    if (packageImageType(relativePath)) {
+      imageBytes += packageFileBytes({ ...file, path: relativePath }).byteLength;
+      if (imageBytes > MAX_PACKAGE_IMAGES_BYTES) throw new Error("Package image assets exceed their total byte limit.");
+      onFile?.(file, relativePath);
+      continue;
     }
     const byteLength = Buffer.byteLength(file.content);
     bytesScanned += byteLength;
@@ -488,21 +501,22 @@ export function normalizePackageFilePath(inputPath: string): string {
 async function readZipPackageFiles(zipInput: Buffer): Promise<PackageInputFile[]> {
   const files: PackageInputFile[] = [];
   let bytesRead = 0;
+  let imageBytes = 0;
 
   await walkZipPackage(zipInput, async (entry, relativePath, zipfile) => {
-    const remainingBytes = MAX_PACKAGE_TEXT_BYTES - bytesRead;
+    const image = packageImageType(relativePath);
+    const remainingBytes = image ? Math.min(MAX_PACKAGE_IMAGE_BYTES, MAX_PACKAGE_IMAGES_BYTES - imageBytes) : MAX_PACKAGE_TEXT_BYTES - bytesRead;
+    if (image && entry.uncompressedSize > remainingBytes) throw new Error(`Package image assets exceed their byte limit: ${relativePath}`);
     if (entry.uncompressedSize > remainingBytes) {
       throw new PackageTextLimitError(relativePath, bytesRead + entry.uncompressedSize, files.length);
     }
     const raw = await readZipEntryBuffer(zipfile, entry, remainingBytes);
-    bytesRead += raw.byteLength;
+    if (image) imageBytes += raw.byteLength;
+    else bytesRead += raw.byteLength;
     if (bytesRead > MAX_PACKAGE_TEXT_BYTES) {
       throw new Error(`Package text exceeds ${MAX_PACKAGE_TEXT_BYTES} bytes.`);
     }
-    files.push({
-      path: relativePath,
-      content: decodePackageText(raw, relativePath),
-    });
+    files.push(packageFileFromBytes(raw, relativePath));
   });
 
   validatePortableFilePaths(files);
@@ -721,4 +735,9 @@ function decodePackageText(buffer: Buffer, relativePath: string): string {
     throw new Error(`Package file must be text without NUL bytes: ${relativePath}`);
   }
   return content;
+}
+
+function packageFileFromBytes(buffer: Buffer, relativePath: string): PackageInputFile {
+  return packageImageType(relativePath) ? packageImageFromBytes(relativePath, buffer)
+    : { path: relativePath, content: decodePackageText(buffer, relativePath) };
 }

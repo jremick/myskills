@@ -1359,8 +1359,8 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 121,
-          "sha256": "786d8897387208fc1cbd7a82eb0df656c7f2a950f7b0cc3e82f679cf23200198",
+          "line": 122,
+          "sha256": "e0ed162a1cbd3e7e58b6c12d36d4be4e401c2b6cbcdd7d121321c8f93a541504",
           "anchor": "export const SUBMISSION_BODY_LIMIT_BYTES = 14 * 1024 * 1024;"
         },
         {
@@ -1410,8 +1410,8 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 362,
-          "sha256": "786d8897387208fc1cbd7a82eb0df656c7f2a950f7b0cc3e82f679cf23200198",
+          "line": 363,
+          "sha256": "e0ed162a1cbd3e7e58b6c12d36d4be4e401c2b6cbcdd7d121321c8f93a541504",
           "anchor": "app.get(\"/v1/capabilities\", async () => {"
         },
         {
@@ -1500,8 +1500,8 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 121,
-          "sha256": "786d8897387208fc1cbd7a82eb0df656c7f2a950f7b0cc3e82f679cf23200198",
+          "line": 122,
+          "sha256": "e0ed162a1cbd3e7e58b6c12d36d4be4e401c2b6cbcdd7d121321c8f93a541504",
           "anchor": "export const SUBMISSION_BODY_LIMIT_BYTES = 14 * 1024 * 1024;"
         },
         {
@@ -1551,8 +1551,8 @@
       "sources": [
         {
           "path": "packages/skill-package/src/package-path.ts",
-          "line": 20,
-          "sha256": "d229203f84b72ef1a46950616479fa1a65f07c1b9bbbaff7f9afd4fbac139a91",
+          "line": 21,
+          "sha256": "d9702bc90c09f3d43d21cabb518095f5dc142a10ab1a43855b3604d5616e3858",
           "anchor": "export const SKILL_PACKAGE_MANIFEST_CONTRACT_ID = \"myskills.skill-package.manifest.strict-root.v1\" as const;"
         },
         {
@@ -1569,8 +1569,8 @@
         },
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 25,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 26,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "loadSkillManifestFromPackageFiles(snapshot);"
         }
       ],
@@ -1602,8 +1602,8 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 941,
-          "sha256": "786d8897387208fc1cbd7a82eb0df656c7f2a950f7b0cc3e82f679cf23200198",
+          "line": 942,
+          "sha256": "e0ed162a1cbd3e7e58b6c12d36d4be4e401c2b6cbcdd7d121321c8f93a541504",
           "anchor": "app.get(\"/v1/skills\", async (request) => {"
         },
         {
@@ -2077,14 +2077,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2217,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 2219,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 873,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 874,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "exportUserSubmission(submissionId: string, token?: string): Promise<SkillPackageBundle>;"
         }
       ],
@@ -2283,8 +2283,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 444,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 445,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -2542,7 +2542,7 @@
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -3567,8 +3567,8 @@
       "sources": [
         {
           "path": "packages/skill-package/src/package-path.ts",
-          "line": 9,
-          "sha256": "d229203f84b72ef1a46950616479fa1a65f07c1b9bbbaff7f9afd4fbac139a91",
+          "line": 10,
+          "sha256": "d9702bc90c09f3d43d21cabb518095f5dc142a10ab1a43855b3604d5616e3858",
           "anchor": "export const DEFAULT_MANIFEST_NAMES = [\"skill.json\", \"skill-manifest.json\", \"ai-skill.json\"] as const;"
         },
         {
@@ -3585,8 +3585,8 @@
         },
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 25,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 26,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "loadSkillManifestFromPackageFiles(snapshot);"
         }
       ],
@@ -3657,8 +3657,8 @@
       "sources": [
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 21,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 22,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "export function encodePackageArchive(files: readonly PackageInputFile[]): Buffer {"
         },
         {
@@ -3696,8 +3696,8 @@
       "sources": [
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 25,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 26,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "loadSkillManifestFromPackageFiles(snapshot);"
         },
         {
@@ -3949,7 +3949,7 @@
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -4142,8 +4142,8 @@
       "sources": [
         {
           "path": "packages/skill-package/src/package-path.ts",
-          "line": 332,
-          "sha256": "d229203f84b72ef1a46950616479fa1a65f07c1b9bbbaff7f9afd4fbac139a91",
+          "line": 338,
+          "sha256": "d9702bc90c09f3d43d21cabb518095f5dc142a10ab1a43855b3604d5616e3858",
           "anchor": "export function validatePackageFiles(files: readonly PackageInputFile[]): PackageFileValidationResult {"
         },
         {
@@ -4160,8 +4160,8 @@
         },
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 8,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 9,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "export class PackageArchiveScanError extends Error {"
         }
       ],
@@ -4304,8 +4304,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 381,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 385,
+          "sha256": "b24cc9fa082f7f7b2d55b75e4683a51492a80e6a5208b413104acc0bf20d6abb",
           "anchor": "useEffect(() => { generation.current += 1; setBusy(false); setError(null); return () => { generation.current += 1; }; }, [api, slug, version, platform]);"
         }
       ],
@@ -4337,14 +4337,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 614,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 615,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 830,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 831,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "searchSkills(query: string): Promise<PublicSkill[]>;"
         }
       ],
@@ -4376,14 +4376,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 729,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 730,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 886,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 887,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "acceptTeamInvitation(invitationId: string, token?: string): Promise<TeamInvitation>;"
         }
       ],
@@ -4427,8 +4427,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 381,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 385,
+          "sha256": "b24cc9fa082f7f7b2d55b75e4683a51492a80e6a5208b413104acc0bf20d6abb",
           "anchor": "useEffect(() => { generation.current += 1; setBusy(false); setError(null); return () => { generation.current += 1; }; }, [api, slug, version, platform]);"
         }
       ],
@@ -4460,8 +4460,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2630,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 2632,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4528,14 +4528,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 254,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 255,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 860,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 861,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "getAdminSharing(token?: string): Promise<AdminSharingSettings>;"
         }
       ],
@@ -4573,8 +4573,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 254,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 255,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         }
       ],
@@ -4612,8 +4612,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 858,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 859,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -4645,14 +4645,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 444,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 445,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 860,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 861,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "getAdminSharing(token?: string): Promise<AdminSharingSettings>;"
         }
       ],
@@ -4690,8 +4690,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 563,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 564,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -4723,14 +4723,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 903,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 904,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 830,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 831,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "searchSkills(query: string): Promise<PublicSkill[]>;"
         }
       ],
@@ -4762,14 +4762,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 4477,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 4479,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 836,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 837,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "confirmPasswordReset(input: { token: string; password: string }): Promise<{ status: \"reset\" }>;"
         }
       ],
@@ -4813,8 +4813,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 377,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 381,
+          "sha256": "b24cc9fa082f7f7b2d55b75e4683a51492a80e6a5208b413104acc0bf20d6abb",
           "anchor": "export function ForkReleaseDraft({ api, slug, version, platform }: { api: DraftClient; slug: string; version: string; platform: string }) {"
         }
       ],
@@ -4846,8 +4846,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 811,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 812,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4891,8 +4891,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2630,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 2632,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4959,14 +4959,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 903,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 904,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 879,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 880,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "listSkillReleases(slug: string, token?: string): Promise<SkillReleaseSummary[]>;"
         }
       ],
@@ -4998,14 +4998,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 839,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 840,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 878,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 879,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "performReviewAction(input: { submissionId: string; action: ReviewActionName; reason?: string; artifactSha256?: string }, token?: string): Promise<ReviewActionResult>;"
         }
       ],
@@ -5037,14 +5037,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 6529,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 6531,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "setDraft({"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 862,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 863,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "listAdminUsers(token?: string): Promise<AdminUser[]>;"
         }
       ],
@@ -5082,8 +5082,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 595,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 596,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -5189,14 +5189,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 254,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 255,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 885,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 886,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "inviteTeamMember(teamId: string, email: string, token?: string): Promise<TeamInvitation>;"
         }
       ],
@@ -5240,8 +5240,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 381,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 385,
+          "sha256": "b24cc9fa082f7f7b2d55b75e4683a51492a80e6a5208b413104acc0bf20d6abb",
           "anchor": "useEffect(() => { generation.current += 1; setBusy(false); setError(null); return () => { generation.current += 1; }; }, [api, slug, version, platform]);"
         }
       ],
@@ -5291,8 +5291,8 @@
         },
         {
           "path": "apps/web/src/components/registry/ReleaseComparison.tsx",
-          "line": 23,
-          "sha256": "0cba568a6032d63d46447b16697099d8237b46e39ff9e39010275c87d32cfd67",
+          "line": 24,
+          "sha256": "d532ed2bf1212f5609cbdb8510380423ceafd92aca10d7660630cdd00563ca8f",
           "anchor": "export function ReleaseComparison(props: Props) {"
         }
       ],
@@ -5618,8 +5618,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2630,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 2632,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -5783,8 +5783,8 @@
         },
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 8,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 9,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "export class PackageArchiveScanError extends Error {"
         }
       ],
@@ -6072,8 +6072,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 254,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 255,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         },
         {
@@ -8235,7 +8235,7 @@
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 72,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export function assertInstallRootLocked(root: string): void {"
         }
       ],
@@ -9657,7 +9657,7 @@
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -10866,8 +10866,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 381,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 385,
+          "sha256": "b24cc9fa082f7f7b2d55b75e4683a51492a80e6a5208b413104acc0bf20d6abb",
           "anchor": "useEffect(() => { generation.current += 1; setBusy(false); setError(null); return () => { generation.current += 1; }; }, [api, slug, version, platform]);"
         }
       ],
@@ -10911,8 +10911,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 17,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 18,
+          "sha256": "b24cc9fa082f7f7b2d55b75e4683a51492a80e6a5208b413104acc0bf20d6abb",
           "anchor": "export function DraftWorkspace(props: Omit<Parameters<typeof DraftWorkspaceState>[0], \"recoveryScope\"> & { credentialEpoch?: string }) {"
         }
       ],
@@ -10956,8 +10956,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 153,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 154,
+          "sha256": "b24cc9fa082f7f7b2d55b75e4683a51492a80e6a5208b413104acc0bf20d6abb",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -10995,9 +10995,9 @@
         },
         {
           "path": "apps/api/src/libraries/packaging.ts",
-          "line": 38,
-          "sha256": "60cfd99587b2128f11164f4b293da465fa668fcb1e60c281a92b5793af436aa4",
-          "anchor": "export const IMPORTER_VERSION = \"myskills-library-importer/2\";"
+          "line": 43,
+          "sha256": "99b3cc345b00846ee7f525b7c576fcff8d123280738fa34b4be6daab33ca939c",
+          "anchor": "export const IMPORTER_VERSION = \"myskills-library-importer/3\";"
         },
         {
           "path": "apps/api/src/libraries/service.ts",
@@ -11052,8 +11052,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 114,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 115,
+          "sha256": "b24cc9fa082f7f7b2d55b75e4683a51492a80e6a5208b413104acc0bf20d6abb",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -11091,8 +11091,8 @@
         },
         {
           "path": "apps/api/src/libraries/packaging.ts",
-          "line": 272,
-          "sha256": "60cfd99587b2128f11164f4b293da465fa668fcb1e60c281a92b5793af436aa4",
+          "line": 287,
+          "sha256": "99b3cc345b00846ee7f525b7c576fcff8d123280738fa34b4be6daab33ca939c",
           "anchor": "export function importProfileDigest(input: { overrides: MappingOverrides; visibility: VisibilityScope }): string {"
         },
         {
@@ -11148,8 +11148,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 381,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 385,
+          "sha256": "b24cc9fa082f7f7b2d55b75e4683a51492a80e6a5208b413104acc0bf20d6abb",
           "anchor": "useEffect(() => { generation.current += 1; setBusy(false); setError(null); return () => { generation.current += 1; }; }, [api, slug, version, platform]);"
         }
       ],
@@ -11187,8 +11187,8 @@
         },
         {
           "path": "apps/api/src/libraries/packaging.ts",
-          "line": 832,
-          "sha256": "60cfd99587b2128f11164f4b293da465fa668fcb1e60c281a92b5793af436aa4",
+          "line": 853,
+          "sha256": "99b3cc345b00846ee7f525b7c576fcff8d123280738fa34b4be6daab33ca939c",
           "anchor": "export function packageDigestFor(files: ReadonlyArray<{ path: string; content: string }>): string {"
         },
         {
@@ -11244,8 +11244,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 377,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 381,
+          "sha256": "b24cc9fa082f7f7b2d55b75e4683a51492a80e6a5208b413104acc0bf20d6abb",
           "anchor": "export function ForkReleaseDraft({ api, slug, version, platform }: { api: DraftClient; slug: string; version: string; platform: string }) {"
         }
       ],
@@ -13481,7 +13481,7 @@
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -14229,8 +14229,8 @@
       "sources": [
         {
           "path": "packages/skill-package/src/package-path.ts",
-          "line": 9,
-          "sha256": "d229203f84b72ef1a46950616479fa1a65f07c1b9bbbaff7f9afd4fbac139a91",
+          "line": 10,
+          "sha256": "d9702bc90c09f3d43d21cabb518095f5dc142a10ab1a43855b3604d5616e3858",
           "anchor": "export const DEFAULT_MANIFEST_NAMES = [\"skill.json\", \"skill-manifest.json\", \"ai-skill.json\"] as const;"
         },
         {
@@ -14247,8 +14247,8 @@
         },
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 21,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 22,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "export function encodePackageArchive(files: readonly PackageInputFile[]): Buffer {"
         }
       ],
@@ -14280,8 +14280,8 @@
       "sources": [
         {
           "path": "apps/web/src/components/registry/ReviewComparison.tsx",
-          "line": 8,
-          "sha256": "ee7044f627a83e79ede92c0017f47f192205f40df4244c32be9bdc88f16a50c9",
+          "line": 9,
+          "sha256": "47fb4f4d61a80ff5ff47ff5def7e98ab64c8dcc17ca498dfdb68f71eeea4f04d",
           "anchor": "export function ReviewComparison({ client, submission }: { client: RegistryClient; submission: ReviewSubmissionSummary }) {"
         },
         {
@@ -14583,8 +14583,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 444,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 445,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -14674,7 +14674,7 @@
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -14706,8 +14706,8 @@
       "sources": [
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 8,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 9,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "export class PackageArchiveScanError extends Error {"
         },
         {
@@ -14752,7 +14752,7 @@
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -19909,8 +19909,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5968,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 5970,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -19954,8 +19954,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5968,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 5970,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -19999,8 +19999,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5968,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 5970,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20044,8 +20044,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 444,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 445,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20089,8 +20089,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 729,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 730,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20134,8 +20134,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5968,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 5970,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20179,8 +20179,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5968,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 5970,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],

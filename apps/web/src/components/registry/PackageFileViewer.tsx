@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isRasterPackageImage } from "../../package-images.js";
 import { Button } from "@/components/ui/button";
 import { safeErrorMessage, type SkillPackageBundle } from "../../api.js";
 
@@ -50,7 +51,7 @@ export function PackageFileViewer({ resourceKey, loadBundle, label = "Inspect pa
   }
 
   const selected = bundle?.files.find((file) => file.path === selectedPath);
-  const binary = selected?.content.includes("\0") ?? false;
+  const binary = isRasterPackageImage(selectedPath) || (selected?.content.includes("\0") ?? false);
   return <section className="package-file-viewer control-plane-section" aria-label="Package files">
     <h2>Package contents</h2>
     <p className="control-plane-muted">Read the instructions, prerequisites, examples, and supporting files before using this package. Files are displayed as text; nothing is executed.</p>

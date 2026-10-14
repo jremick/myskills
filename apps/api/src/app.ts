@@ -18,6 +18,7 @@ import { AppError, APPLICATION_SCOPES, createArchitectureDiagramArtifact, parseS
 import {
   MAX_PACKAGE_ARCHIVE_BYTES,
   MAX_PACKAGE_FILES,
+  findPackageLogo,
   preparePackageManifest,
   PackageManifestFileError,
   parseSkillManifest,
@@ -1009,6 +1010,24 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       .header("content-length", String(Buffer.byteLength(bundle.body)))
       .type(bundle.artifact.contentType)
       .send(bundle.body);
+  });
+
+  app.get("/v1/skills/:slug/releases/:version/logo", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!options.submissionService) throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    const bundle = await readAuthorizedArtifactBundle({
+      authService: options.authService,
+      submissionService: options.submissionService,
+      authorization: requestAuthorization(request),
+      ...parseReleaseParams(request.params),
+    });
+    if (!bundle) return reply.code(404).send({ error: { code: "LOGO_NOT_FOUND", message: "Skill logo not found." } });
+    const logo = findPackageLogo((JSON.parse(bundle.body) as { files: PackageInputFile[] }).files);
+    if (!logo) return reply.code(404).send({ error: { code: "LOGO_NOT_FOUND", message: "Skill logo not found." } });
+    return reply.header("x-content-type-options", "nosniff")
+      .header("content-security-policy", "default-src 'none'; sandbox")
+      .header("content-length", String(logo.bytes.byteLength))
+      .type(logo.contentType).send(logo.bytes);
   });
 
   app.get("/v1/skills/:slug", async (request, reply) => {

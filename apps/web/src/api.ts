@@ -827,6 +827,7 @@ export interface RegistryClient extends Partial<ArchitecturePlanClient>, Partial
   getUserSubmissionDetail?(submissionId: string): Promise<UserSubmissionDetail>;
   getReviewSubmissionDetail?(submissionId: string): Promise<ReviewSubmissionDetail>;
   getReleaseBundle?(slug: string, version: string, platform?: string): Promise<SkillPackageBundle>;
+  getSkillLogoUrl?(slug: string, version: string): string;
   searchSkills(query: string): Promise<PublicSkill[]>;
   getSkill(slug: string): Promise<PublicSkill>;
   getRelease(slug: string, version: string): Promise<ReleaseMetadata>;
@@ -1012,6 +1013,7 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
   const cookieSessionHeaders = { "x-myskills-session-response": "cookie" };
   return {
     evaluations: createEvaluationClient(root, fetchImpl, token),
+    getSkillLogoUrl: (slug, version) => `${root}/v1/skills/${encodeURIComponent(slug)}/releases/${encodeURIComponent(version)}/logo`,
     deviceLogin: createDeviceLoginClient(root, fetchImpl, token),
     oauth: createOAuthConnectionClient(root, fetchImpl, token),
     improvements: createImprovementClient(<T,>(url: string, init?: { method?: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }) => requestJson<T>(fetchImpl, `${root}${url}`, { ...init, token })),

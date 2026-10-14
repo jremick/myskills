@@ -1,9 +1,10 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { BundleKind, BundleMembership, BundleSummary, PublicSkill } from "@myskills-app/core";
 import { inAppClick, tileTone } from "./BundleUtils.js";
+import { SkillLogo } from "./SkillLogo.js";
 
-export function Tile({ slug, size = "sm" }: { slug: string; size?: "sm" | "md" | "lg" }) {
-  return <span aria-hidden="true" className={`bundle-tile is-${tileTone(slug)} is-${size}`} />;
+export function Tile({ slug, size = "sm", src }: { slug: string; size?: "sm" | "md" | "lg"; src?: string }) {
+  return <SkillLogo src={src} tone={tileTone(slug)} className={`bundle-tile is-${tileTone(slug)} is-${size}`} />;
 }
 
 /**
@@ -42,7 +43,7 @@ export function Highlight({ text, query }: { text: string; query: string }) {
   return <>{text.slice(0, index)}<mark>{text.slice(index, index + query.length)}</mark>{text.slice(index + query.length)}</>;
 }
 
-export function SkillLink({ skill, id, href, current, query = "", onOpen }: { skill: PublicSkill; id: string; href: string; current: boolean; query?: string; onOpen: (element: HTMLElement) => void }) {
+export function SkillLink({ skill, id, href, current, query = "", onOpen, skillLogoUrl }: { skill: PublicSkill; id: string; href: string; current: boolean; query?: string; onOpen: (element: HTMLElement) => void; skillLogoUrl?: (slug: string, version: string) => string }) {
   return (
     <a
       aria-current={current ? "true" : undefined}
@@ -51,7 +52,7 @@ export function SkillLink({ skill, id, href, current, query = "", onOpen }: { sk
       id={id}
       onClick={(event) => inAppClick(event, () => onOpen(event.currentTarget))}
     >
-      <Tile slug={skill.slug} />
+      <Tile slug={skill.slug} src={skill.latestVersion ? skillLogoUrl?.(skill.slug, skill.latestVersion) : undefined} />
       <span className="bundle-skill-name"><Highlight text={skill.title} query={query} /></span>
     </a>
   );

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { parseSemanticVersion } from "@myskills-app/core";
 import {
   loadStoredSkillManifestFromPackageFiles, MAX_PACKAGE_FILES, MAX_PACKAGE_TEXT_BYTES,
-  normalizePackageFilePath, skillSlugSchema, validatePackageFiles,
+  normalizePackageFilePath, packageFileBytes, packageImageType, skillSlugSchema, validatePackageFiles,
 } from "@myskills-app/skill-package";
 import { ProtocolError } from "@modelcontextprotocol/server";
 import { isScalar, parseDocument, visit } from "yaml";
@@ -101,11 +101,10 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
     const skill: NativeSkill = {
       uri: resourceUri(origin, { ...identity, path: "SKILL.md" }),
       frontmatter,
-      resources: files.map((file) => ({
-        uri: resourceUri(origin, { ...identity, path: file.path }),
-        digest: `sha256:${digest(file.content)}`,
-        size: Buffer.byteLength(file.content, "utf8"),
-      })).sort((a, b) => a.uri < b.uri ? -1 : a.uri > b.uri ? 1 : 0),
+      resources: files.map((file) => {
+        const bytes = packageFileBytes(file);
+        return { uri: resourceUri(origin, { ...identity, path: file.path }), digest: `sha256:${digest(bytes)}`, size: bytes.byteLength };
+      }).sort((a, b) => a.uri < b.uri ? -1 : a.uri > b.uri ? 1 : 0),
     };
     return { skill, files };
   }
@@ -153,7 +152,7 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
         const { files, identity } = await loadUri(client, input.uri, false);
         const file = files.find((item) => item.path === identity.path);
         if (!file) throw new IncompatibleSkill();
-        return { ...privateResult, contents: [{ uri: input.uri, mimeType: mimeType(file.path), text: file.content }] };
+        return { ...privateResult, contents: [{ uri: input.uri, mimeType: mimeType(file.path), ...(isRaster(file.path) ? { blob: file.content } : { text: file.content }) }] };
       });
     },
     /**
@@ -177,11 +176,12 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
         if (!file) throw new IncompatibleSkill();
         return {
           skill: { slug, version, name: skill.frontmatter.name, description: skill.frontmatter.description },
-          file: { path: file.path, sha256: digest(file.content), size: Buffer.byteLength(file.content, "utf8"), mimeType: mimeType(file.path) },
+          file: { ...fileMetadata(file), mimeType: mimeType(file.path) },
           files: files
-            .map((item) => ({ path: item.path, sha256: digest(item.content), size: Buffer.byteLength(item.content, "utf8") }))
+            .map(fileMetadata)
             .sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
           content: file.content,
+          ...(isRaster(file.path) ? { contentEncoding: "base64" as const } : {}),
         };
       });
     },
@@ -189,7 +189,17 @@ export function createNativeSkillsHandlers(options: RegistryApiClientOptions) {
 }
 
 function mimeType(path: string): string {
-  return path.endsWith(".md") ? "text/markdown" : "text/plain";
+  return packageImageType(path) ?? (path.endsWith(".md") ? "text/markdown" : "text/plain");
+}
+
+function isRaster(path: string): boolean {
+  const type = packageImageType(path);
+  return type !== undefined && type !== "image/svg+xml";
+}
+
+function fileMetadata(file: { path: string; content: string }) {
+  const bytes = packageFileBytes(file);
+  return { path: file.path, sha256: digest(bytes), size: bytes.byteLength };
 }
 
 function digest(value: string | Uint8Array): string {

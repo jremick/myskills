@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { bytesToBase64, isPackageImage, isRasterPackageImage } from "../../package-images.js";
 import { Button } from "@/components/ui/button";
 import type { ArchitectureNavigationGuard } from "@/components/architecture/useArchitectureNavigationGuard";
 import { reviewStatusLabel, securityStatusLabel } from "@/components/registry/status-display";
@@ -255,13 +256,16 @@ function DraftWorkspaceState({ api, actorId, recoveryScope, url, onNavigate, onN
     setImportPreview(null); setHeld([]); setNotice(null); setRemoveRoot(false);
     const chosen = Array.from(selectedFiles);
     if (chosen.length > MAX_FILES) { setNotice({ text: "Choose at most 500 files.", error: true }); return; }
-    if (chosen.reduce((sum, file) => sum + file.size, 0) > MAX_TEXT) { setNotice({ text: "Selected text exceeds 1 MiB. Choose a smaller package.", error: true }); return; }
+    if (chosen.filter(file => !isPackageImage(file.name)).reduce((sum, file) => sum + file.size, 0) > MAX_TEXT) { setNotice({ text: "Selected text exceeds 1 MiB. Choose a smaller package.", error: true }); return; }
+    const images = chosen.filter(file => isPackageImage(file.name));
+    if (images.some(file => file.size > 1024 * 1024) || images.reduce((sum, file) => sum + file.size, 0) > 5 * 1024 * 1024) { setNotice({ text: "Images are limited to 1 MiB each and 5 MiB in total.", error: true }); return; }
     try {
       const results: HeldFile[] = [];
       for (const file of chosen) {
         const path = file.webkitRelativePath || file.name;
         try {
-          const content = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer());
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          const content = isRasterPackageImage(path) ? bytesToBase64(bytes) : new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
           if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(content)) throw new Error("Binary or control-character content is excluded.");
           results.push({ path, content, included: true });
         } catch { results.push({ path, content: "", included: false, error: "Invalid UTF-8 or binary content; this file cannot be imported." }); }
@@ -279,7 +283,7 @@ function DraftWorkspaceState({ api, actorId, recoveryScope, url, onNavigate, onN
     setBusy(true); setNotice(null);
     try {
       const included = held.filter((file) => file.included).map(({ path, content }) => ({ path: removeRoot && folderRoot ? path.slice(folderRoot.length + 1) : path, content }));
-      if (!included.length) throw new Error("Select at least one readable text file.");
+      if (!included.length) throw new Error("Select at least one readable package file.");
       const result = await api.preview({ files: included });
       if (ticket === generation.current) setImportPreview(result.preview);
     } catch (error) { if (ticket === generation.current) setNotice({ text: message(error), error: true }); }
@@ -337,7 +341,7 @@ function DraftWorkspaceState({ api, actorId, recoveryScope, url, onNavigate, onN
 
   const manifestFile = files.find((file) => file.path === "skill.json" || file.path === "skill.manifest.json");
   const manifest = parseObject(manifestFile?.content);
-  const textBytes = files.reduce((sum, file) => sum + new TextEncoder().encode(file.content).length, 0);
+  const textBytes = files.filter(file => !isPackageImage(file.path)).reduce((sum, file) => sum + new TextEncoder().encode(file.content).length, 0);
   const heldChanges = importPreview ?? null;
 
   return <section aria-label="Private package drafts" className="author-drafts" ref={workspaceRef} aria-busy={busy}>

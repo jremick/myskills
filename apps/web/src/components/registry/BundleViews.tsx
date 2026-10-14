@@ -18,6 +18,7 @@ export interface CatalogViewProps {
   /** Reload the catalog, re-checking which bundles this reader can see. */
   onRefreshCatalog: () => void;
   skillHref: (slug: string) => string;
+  skillLogoUrl?: (slug: string, version: string) => string;
   bundleHref: (id: string) => string;
   onOpenSkill: (slug: string, from: HTMLElement) => void;
   onOpenBundle: (id: string, from: HTMLElement) => void;
@@ -42,7 +43,7 @@ function MemberLine({ member, context, props }: { member: { skill: PublicSkill; 
   return (
     <div className="bundle-member">
       <div className="bundle-member-name">
-        <SkillLink
+        <SkillLink skillLogoUrl={props.skillLogoUrl}
           current={props.selection?.kind === "skill" && props.selection.slug === skill.slug}
           href={props.skillHref(skill.slug)}
           id={domId("skill", context, skill.slug)}
@@ -203,7 +204,7 @@ export function ListView(props: CatalogViewProps) {
         {rows.map((row) => (
           <li className="bundle-list-row" key={row.skill.slug}>
             <div className="bundle-list-name">
-              <SkillLink
+              <SkillLink skillLogoUrl={props.skillLogoUrl}
                 current={props.selection?.kind === "skill" && props.selection.slug === row.skill.slug}
                 href={props.skillHref(row.skill.slug)}
                 id={domId("skill", "list", row.skill.slug)}
@@ -251,7 +252,7 @@ function OutlineNode({ nodeKey, label, count, top = false, props, children, afte
 function OutlineLeaf({ skill, context, props }: { skill: PublicSkill; context: string; props: CatalogViewProps }) {
   return (
     <li className="bundle-outline-leaf">
-      <SkillLink
+      <SkillLink skillLogoUrl={props.skillLogoUrl}
         current={props.selection?.kind === "skill" && props.selection.slug === skill.slug}
         href={props.skillHref(skill.slug)}
         id={domId("skill", "outline", context, skill.slug)}
