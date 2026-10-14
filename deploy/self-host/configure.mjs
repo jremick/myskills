@@ -17,6 +17,61 @@ const destinationKeys = ["MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL", ...["ENDP
 
 class OperatorError extends Error {}
 function fail(message) { throw new OperatorError(message); }
+const restorePhases = ["configuration-or-restore", "deadline", "download-manifest", "download-backup", "verify-local-backup",
+  "create-isolated-destinations", "restore-database", "restore-artifacts", "verify-restored-database"];
+function emitRestoreFailure(stage, reason, status, sourceLocation) {
+  const exitStatus = Number.isInteger(status) && status >= 0 && status <= 255 ? status : null;
+  // Stdout survives the shell's configuration stderr suppression. No provider text,
+  // destinations or private recovery paths cross this boundary.
+  console.log(JSON.stringify({ schemaVersion: 1, kind: "myskills-restore-failure", stage, reason, exitStatus,
+    ...(sourceLocation === undefined ? {} : { sourceLocation }) }));
+  process.exitCode = 1;
+}
+function restoreReports(result) {
+  const reports = []; let bytes = 0, lines = 0;
+  for (const source of ["stdout", "stderr"]) {
+    const text = typeof result[source] === "string" ? result[source] : "";
+    bytes += Buffer.byteLength(text);
+    if (bytes > 16_384) return null;
+    const streamLines = text.split("\n");
+    for (let index = 0; index < streamLines.length; index++) {
+      const line = streamLines[index].trim(); if (!line) continue;
+      if (++lines > 64) return null;
+      try { reports.push({ source, firstLine: index === 0, report: JSON.parse(line) }); } catch { /* Node warnings and private evidence paths are never returned. */ }
+    }
+  }
+  return reports;
+}
+function restoreSourceLocation(stderr) {
+  const sources = { "restore-registry-backup.mjs": "restore-cli", "lib/registry-backup.mjs": "registry-backup", "lib/registry-recovery.mjs": "registry-recovery" };
+  const frames = stderr.matchAll(/^[ \t]+at (?:(?:[^\r\n(]+\()|async )?file:\/\/\/app\/scripts\/(restore-registry-backup\.mjs|lib\/registry-backup\.mjs|lib\/registry-recovery\.mjs):([1-9][0-9]{0,4}):[1-9][0-9]{0,4}\)?[ \t]*$/gm);
+  for (const frame of frames) if (Number(frame[2]) <= 10_000) return { source: sources[frame[1]], line: Number(frame[2]) };
+  return null;
+}
+function restoreFailure(result, runId) {
+  if (result.error) return { stage: "restore-child", reason: result.error.code === "ETIMEDOUT" ? "child-timeout"
+    : result.error.code === "ENOBUFS" ? "child-output-limit" : "child-start-failed" };
+  if (result.signal) return { stage: "restore-child", reason: "child-signalled" };
+  const reports = restoreReports(result);
+  if (!reports || reports.length > 1) return { stage: "restore-report", reason: "invalid-restore-report" };
+  if (!reports.length) {
+    const stderr = typeof result.stderr === "string" ? result.stderr : "";
+    const childFailure = reason => ({ stage: "restore-child", reason, sourceLocation: restoreSourceLocation(stderr) });
+    if (/^Error \[(?:ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND)\]:|^[ \t]+code: ['"](?:ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND)['"],?[ \t]*$/m.test(stderr)) return childFailure("child-module-load-failed");
+    if (/^Error \[ERR_UNHANDLED_REJECTION\]:|^[ \t]+code: ['"]ERR_UNHANDLED_REJECTION['"],?[ \t]*$/m.test(stderr)) return childFailure("child-unhandled-rejection");
+    if (/^[ \t]+throw er;[ \t]*\/\/ Unhandled 'error' event[ \t]*$/m.test(stderr)) return childFailure("child-unhandled-error");
+    if (/^(?:SyntaxError|ReferenceError|TypeError)(?: \[[A-Z_]+\])?:/m.test(stderr)) return childFailure("child-runtime-failed");
+    return { stage: "restore-report", reason: "missing-restore-report" };
+  }
+  const { source, firstLine, report } = reports[0];
+  if (!report || typeof report !== "object" || Array.isArray(report) || typeof report.passed !== "boolean") return { stage: "restore-report", reason: "invalid-restore-report" };
+  if (report.runId !== undefined && report.runId !== runId || report.passed && report.runId !== runId) return { stage: "restore-report", reason: "report-identity-mismatch" };
+  if (result.status === 0 && report.passed && source === "stdout" && firstLine) return null;
+  if (report.passed || !restorePhases.includes(report.failedPhase)
+    || source === "stderr" && !["configuration-or-restore", "deadline"].includes(report.failedPhase)
+    || !["configuration-or-restore", "deadline"].includes(report.failedPhase) && report.runId !== runId) return { stage: "restore-report", reason: "invalid-restore-report" };
+  return { stage: report.failedPhase, reason: "restore-failed" };
+}
 function options(input) {
   const [command, ...rest] = input; const values = {};
   for (let i = 0; i < rest.length; i += 2) {
@@ -115,12 +170,12 @@ async function main() {
       || target.MYSKILLS_RECOVERY_DESTINATION_S3_BUCKET === runtime.S3_BUCKET) fail("restore requires new empty loopback database and object bucket destinations.");
     if (args.command === "recovery-check") { console.log("Restore configuration passed. The recovery tool will independently refuse non-empty destinations."); return; }
     const script = resolve(dirname(fileURLToPath(import.meta.url)), "../../scripts/restore-registry-backup.mjs");
-    const result = spawnSync(process.execPath, [script, "--execute", args["run-id"]], { env: { ...backup, ...target, PATH: process.env.PATH,
+    const result = spawnSync(process.execPath, [script, "--execute", args["run-id"]], { env: { ...backup, ...target, PATH: process.env.PATH, HOME: "/tmp",
       MYSKILLS_RECOVERY_OUTPUT_PARENT: configDir,
       ...(process.env.NODE_EXTRA_CA_CERTS ? { NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS } : {}) }, encoding: "utf8", timeout: 1_801_000, maxBuffer: 1024 * 1024 });
-    let report; try { report = JSON.parse(result.stdout?.split("\n")[0]); } catch { /* A missing receipt remains a failure. */ }
-    if (result.status !== 0 || report?.passed !== true || report.runId !== args["run-id"]) fail("guarded restore failed; preserve protected recovery evidence and inspect the recovery runbook.");
-    console.log(JSON.stringify({ passed: true, runId: report.runId })); return;
+    const failure = restoreFailure(result, args["run-id"]);
+    if (failure) { emitRestoreFailure(failure.stage, failure.reason, result.status, failure.sourceLocation); return; }
+    console.log(JSON.stringify({ passed: true, runId: args["run-id"] })); return;
   }
   if (!isAbsolute(args["target-bundle"] ?? "")) fail("an absolute target bundle path is required.");
   const target = verifyBundle(args["target-bundle"], args.platform);
@@ -319,6 +374,7 @@ async function interactiveAnswers() {
 }
 
 try { await main(); } catch (error) {
+  if (["recovery-check", "recovery-execute"].includes(process.argv[2])) emitRestoreFailure("configuration", "configuration-rejected", null);
   // The message is a fixed helper diagnosis. Raw provider, file, answer and child output is withheld.
   console.error(`MySkills operator: ${error instanceof OperatorError ? error.message : "operation failed; inspect protected configuration and the operator runbook."}`);
   process.exitCode = 1;
