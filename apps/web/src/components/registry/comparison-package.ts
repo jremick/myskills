@@ -2,7 +2,7 @@ import type { SkillPackageBundle, SkillReleaseSummary } from "../../api.js";
 import { isPackageImage } from "../../package-images.js";
 
 const MAX_FILES = 500;
-const MAX_PACKAGE_CHARACTERS = 1_048_576;
+const MAX_PACKAGE_CHARACTERS = 5 * 1024 * 1024;
 const MANIFEST_NAMES = ["skill.json", "skill-manifest.json", "ai-skill.json"];
 export type FileChange = { path: string; kind: "Added" | "Removed" | "Modified" | "Unchanged"; base: string | undefined; target: string | undefined };
 

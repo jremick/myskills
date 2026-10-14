@@ -9,7 +9,7 @@ import { MAX_PACKAGE_IMAGE_BYTES, MAX_PACKAGE_IMAGES_BYTES, packageFileBytes, pa
 
 export const DEFAULT_MANIFEST_NAMES = ["skill.json", "skill-manifest.json", "ai-skill.json"] as const;
 export const MAX_PACKAGE_FILES = 500;
-export const MAX_PACKAGE_TEXT_BYTES = 1024 * 1024;
+export const MAX_PACKAGE_TEXT_BYTES = 5 * 1024 * 1024;
 export const MAX_PACKAGE_ARCHIVE_BYTES = 10 * 1024 * 1024;
 export const MAX_PACKAGE_ARCHIVE_ENTRIES = MAX_PACKAGE_FILES * 2;
 

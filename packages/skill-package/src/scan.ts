@@ -5,9 +5,9 @@ export interface ScanFinding {
   path?: string;
 }
 
-// Every package accepted by the 1 MiB UTF-8 package limit fits this ceiling.
+// Every package accepted by the 5 MiB UTF-8 package limit fits this ceiling.
 // Also bound direct callers without truncating text or skipping long lines.
-export const MAX_SCAN_TEXT_LENGTH = 1024 * 1024;
+export const MAX_SCAN_TEXT_LENGTH = 5 * 1024 * 1024;
 
 const secretPatterns = [
   /\bATATT[0-9A-Za-z_-]{20,}\b/,

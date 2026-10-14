@@ -63,7 +63,7 @@ test("SDK draft tools preserve package bytes, strict unions, revisions, API erro
     ["draft_update", { path: { id: "draft-1" }, body: { expectedRevision: Number.MAX_SAFE_INTEGER + 1, title: "One", files } }],
     ["draft_validate", { path: { id: "../escape" }, body: { expectedRevision: 7 } }],
     ...["0", "1.2", "1e2", "9007199254740992", "../7"].map(revision => ["draft_revision", { path: { id: "draft-1", revision } }]),
-    ["draft_create", { body: { title: "One", files: [{ path: "SKILL.md", content: "é".repeat(600_000) }] } }],
+    ["draft_create", { body: { title: "One", files: [{ path: "SKILL.md", content: "é".repeat(5 * 1024 * 1024 / 2 + 1) }] } }],
     ["draft_submit", { path: { id: "draft-1" }, body: { expectedRevision: 7, visibility: "public" } }],
   ] as Array<[string, Record<string, unknown>]>;
   for (const [name, args] of invalid) {
@@ -78,6 +78,15 @@ test("SDK draft tools preserve package bytes, strict unions, revisions, API erro
     assert.equal((result.structuredContent as { error: { code: string } }).error.code, code);
     assert.equal(JSON.stringify(result).includes("synthetic-sensitive-content"), false);
   }
+});
+
+test("SDK draft intake forwards five MiB text through escaped JSON transport", async (t) => {
+  const f = await fixture(t);
+  const client = await f.client("all");
+  const body = { title: "Five MiB", files: [{ path: "SKILL.md", content: "\u0001".repeat(5 * 1024 * 1024) }] };
+  const result = await client.callTool({ name: "draft_create", arguments: { body } });
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(f.requests.at(-1), { method: "POST", url: "/v1/drafts", body });
 });
 
 test("SDK source forks remain discoverable and challenge for their additional read scopes", async (t) => {

@@ -94,7 +94,7 @@ Required public values and routes:
 
 If `VITE_API_BASE_URL` changes, rebuild the `web` image because Vite embeds that value during the build.
 
-The nginx templates set `client_max_body_size 14m` to match the API's bounded JSON submission envelope (including base64 overhead for the decoded archive limit). Any replacement ingress/proxy must preserve an equivalent or tighter compatible limit; nginx's 1 MiB default will break valid package submission before the API can return its own bounded error.
+The production nginx template sets `client_max_body_size 40m` to match the API's bounded JSON submission envelope: 5 MiB of UTF-8 text can expand sixfold when escaped, and 5 MiB of images add base64 overhead. Package ZIP uploads retain their 10 MiB decoded archive limit. Apply migration `0043_package_size_limits.sql` before starting the updated API; it raises saved draft text to 5 MiB and retained target-operation artifacts to 40 MiB. No new environment variable is required. Custom `MYSKILLS_RECOVERY_MAXIMUM_BYTES` values must be at least 41943040 bytes. Any replacement ingress/proxy must preserve an equivalent or tighter compatible limit; nginx's 1 MiB default will break valid package submission before the API can return its own bounded error.
 
 ## Production Safety Gates
 

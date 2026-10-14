@@ -13,9 +13,10 @@ map $uri $myskills_cache_control {
 server {
   listen ${PORT};
   server_name _;
-  # Keep proxy ingress aligned with the API's submission JSON limit. The
-  # package archive remains capped at 10 MiB after base64 decoding.
-  client_max_body_size 14m;
+  # Keep proxy ingress aligned with the API's submission JSON limit.
+  # Text accepts 5 MiB (up to 30 MiB when JSON-escaped), plus base64 images.
+  # Package archives remain capped at 10 MiB after base64 decoding.
+  client_max_body_size 40m;
 
   root /usr/share/nginx/html;
   index index.html;

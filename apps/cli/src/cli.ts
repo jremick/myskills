@@ -421,8 +421,8 @@ function parityCommandContext(parsed: ParsedArgs, runtime: CliRuntime): ParityCo
       }
     },
     async readInput(inputPath) {
-      const inputLimit = parsed.command === "drafts" ? 14 * 1024 * 1024 : 256_000;
-      const inputLimitLabel = parsed.command === "drafts" ? "14 MiB" : "256 KB";
+      const inputLimit = parsed.command === "drafts" ? 40 * 1024 * 1024 : 256_000;
+      const inputLimitLabel = parsed.command === "drafts" ? "40 MiB" : "256 KB";
       const info = await lstat(inputPath);
       if (!info.isFile() || info.size > inputLimit) throw new CliError(`Input must be a regular JSON file of at most ${inputLimitLabel}.`, 2, "CLI_ARGUMENTS_INVALID");
       let input: unknown;

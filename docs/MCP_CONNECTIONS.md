@@ -55,9 +55,9 @@ The matrix records direct coverage, constrained producer workflows, trusted
 handoffs and missing product capabilities separately. A source tool mapping
 or a successful local test does not establish real ChatGPT/Claude acceptance.
 
-MCP accepts application API request bodies up to 14 MiB, with 64 KiB reserved
+MCP accepts application API request bodies up to 40 MiB, with 64 KiB reserved
 for the HTTP JSON-RPC envelope. Metadata responses are bounded to 512 KiB and
-exports to 10 MiB. Reviewed exports preserve the API response digest and
+exports to 40 MiB. Reviewed exports preserve the API response digest and
 verify the returned bytes; ordinary exports use a computed digest.
 
 ## Protocol profile

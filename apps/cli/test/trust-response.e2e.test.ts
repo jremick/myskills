@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
 import { runCli, type CliRuntime, type StoredCliToken } from "../src/cli.js";
-import { readBoundedResponse, decodeResponseUtf8 } from "../src/bounded-response.js";
+import { readBoundedResponse, decodeResponseUtf8, MAX_PACKAGE_RESPONSE_BYTES } from "../src/bounded-response.js";
 
 test("bounded response cancels overflow/stalls before text allocation and strictly decodes raw UTF-8", async () => {
   let cancelled = false;
@@ -49,7 +49,7 @@ for (const mode of ["header-overflow", "chunk-overflow", "invalid-utf8", "stalle
     const files = [{ path: "SKILL.md", content: "---\nname: bounded-example\ndescription: Synthetic fixture.\n---\nHello.\n" },
       { path: "skill.json", content: JSON.stringify({ name: "bounded-example", title: "Bounded example", summary: "Synthetic fixture.", version: "1.0.0", license: "MIT", platforms: [{ name: "codex", install_target: "codex-skill" }] }) }];
     const expected = mode === "invalid-utf8" ? Buffer.from([0xc3, 0x28]) : Buffer.from(JSON.stringify({ files }));
-    const artifact = { sha256: createHash("sha256").update(expected).digest("hex"), byteSize: mode === "invalid-size" ? 10 * 1024 * 1024 + 1 : expected.length };
+    const artifact = { sha256: createHash("sha256").update(expected).digest("hex"), byteSize: mode === "invalid-size" ? MAX_PACKAGE_RESPONSE_BYTES + 1 : expected.length };
     let bundleReads = 0;
     const api = createServer((request, reply) => {
       reply.setHeader("content-type", "application/json");

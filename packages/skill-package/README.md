@@ -22,7 +22,7 @@ only with their standard `/private` destinations. No weaker read mode is used on
 an unsupported operating system. ZIP-buffer intake remains portable for web/API
 uploads.
 
-Directory, ZIP, and normalized text input share a 1 MiB text budget, 500-file limit,
+Directory, ZIP, and normalized text input share a 5 MiB text budget, 500-file limit,
 32-component path-depth limit, and strict UTF-8/NUL validation. Directory and ZIP
 walks also cap entries at 1,000; compressed archives are limited to 10 MiB. Readers
 preserve valid UTF-8 bytes, including a text BOM, in the held file contents.

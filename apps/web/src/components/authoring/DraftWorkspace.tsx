@@ -5,7 +5,7 @@ import type { ArchitectureNavigationGuard } from "@/components/architecture/useA
 import { reviewStatusLabel, securityStatusLabel } from "@/components/registry/status-display";
 import type { AuthorDraft, DraftClient, DraftFile, DraftPreview, DraftSourceInput, DraftSubmission, DraftSummary, DraftValidation } from "@/drafts-api";
 
-const MAX_TEXT = 1_048_576;
+const MAX_TEXT = 5 * 1024 * 1024;
 const MAX_FILES = 500;
 const MAX_ZIP = 10_485_760;
 type Recovery = { registry: string; actorId: string; draftId: string; baseRevision: number; title: string; files: DraftFile[] };
@@ -256,7 +256,7 @@ function DraftWorkspaceState({ api, actorId, recoveryScope, url, onNavigate, onN
     setImportPreview(null); setHeld([]); setNotice(null); setRemoveRoot(false);
     const chosen = Array.from(selectedFiles);
     if (chosen.length > MAX_FILES) { setNotice({ text: "Choose at most 500 files.", error: true }); return; }
-    if (chosen.filter(file => !isPackageImage(file.name)).reduce((sum, file) => sum + file.size, 0) > MAX_TEXT) { setNotice({ text: "Selected text exceeds 1 MiB. Choose a smaller package.", error: true }); return; }
+    if (chosen.filter(file => !isPackageImage(file.name)).reduce((sum, file) => sum + file.size, 0) > MAX_TEXT) { setNotice({ text: "Selected text exceeds 5 MiB. Choose a smaller package.", error: true }); return; }
     const images = chosen.filter(file => isPackageImage(file.name));
     if (images.some(file => file.size > 1024 * 1024) || images.reduce((sum, file) => sum + file.size, 0) > 5 * 1024 * 1024) { setNotice({ text: "Images are limited to 1 MiB each and 5 MiB in total.", error: true }); return; }
     try {
@@ -366,7 +366,7 @@ function DraftWorkspaceState({ api, actorId, recoveryScope, url, onNavigate, onN
       </div>
       <details className="draft-assistance"><summary>Manifest and SKILL.md metadata</summary>{manifest && manifestFile ? <><div className="draft-manifest-fields">{["name", "title", "summary", "version", "license"].map((field) => <label key={field}>{field === "name" ? "Skill name" : field[0]!.toUpperCase() + field.slice(1)}<input aria-label={`Manifest ${field}`} disabled={busy || Boolean(recovery)} value={typeof manifest[field] === "string" ? manifest[field] as string : ""} onChange={(event) => editFiles(files.map((file) => file.path === manifestFile.path ? { ...file, content: `${JSON.stringify({ ...manifest, [field]: event.target.value }, null, 2)}\n` } : file))} /></label>)}<label>Visibility<select aria-label="Manifest visibility" disabled={busy || Boolean(recovery)} value={typeof manifest.visibility === "string" ? manifest.visibility : ""} onChange={(event) => editFiles(files.map((file) => file.path === manifestFile.path ? { ...file, content: `${JSON.stringify({ ...manifest, visibility: event.target.value }, null, 2)}\n` } : file))}><option value="" disabled>Choose visibility</option><option value="private">Private</option><option value="team">Team</option><option value="public">Public</option></select></label></div><p>Only the field you change is updated. Other manifest fields and license values are retained.</p><Button size="sm" variant="outline" disabled={busy || Boolean(recovery) || !files.some((file) => file.path === "SKILL.md")} onClick={syncMetadata}>Sync SKILL.md metadata</Button></> : <p>The manifest is incomplete. Edit skill.json as text, then use these fields when it contains a JSON object.</p>}</details>
       <div className="draft-actions"><Button size="sm" disabled={busy || Boolean(recovery) || Boolean(conflict) || !title.trim() || !dirty || textBytes > MAX_TEXT} onClick={() => void runSaved("save")}>Save draft</Button><Button size="sm" variant="outline" disabled={busy || dirty || Boolean(recovery) || Boolean(conflict)} onClick={() => void runSaved("validate")}>Validate saved draft</Button><Button size="sm" variant="outline" disabled={busy || dirty || Boolean(recovery) || Boolean(conflict)} onClick={() => void runSaved("submit")}>Submit saved revision</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => void openHistory()}>Saved history</Button></div>
-      {textBytes > MAX_TEXT && <p role="alert">Package text exceeds 1 MiB. Remove or shorten files before saving.</p>}
+      {textBytes > MAX_TEXT && <p role="alert">Package text exceeds 5 MiB. Remove or shorten files before saving.</p>}
       {dirty && <p className="draft-editor-note">Save your held edits before validating or submitting. Your private draft history retains every saved snapshot.</p>}
       <details className="draft-release-notes"><summary>Release notes</summary><label>Release notes<textarea aria-label="Draft release notes" disabled={busy} value={releaseNotes} onChange={(event) => setReleaseNotes(event.target.value)} /></label><label>Change kind<select aria-label="Draft change kind" disabled={busy} value={changeKind} onChange={(event) => setChangeKind(event.target.value as typeof changeKind)}><option value="fix">Fix</option><option value="feature">Feature</option><option value="breaking">Breaking change</option><option value="security">Security fix</option><option value="maintenance">Maintenance</option></select></label></details>
       {validation && <ValidationReport validation={validation} />}

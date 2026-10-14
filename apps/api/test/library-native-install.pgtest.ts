@@ -181,8 +181,8 @@ test("library native install journey: normalized runtime name, preserved origina
       ...refs("skills/many-at", 495),
       "skills/many-over/SKILL.md": "---\nname: many-over\ndescription: One file over the limit.\n---\n\n# Over\n",
       ...refs("skills/many-over", 496),
-      "skills/big/SKILL.md": `---\nname: big\ndescription: Large instructions.\n---\n\n${"a".repeat(400_000)}\n`,
-      "skills/big/data.md": "b".repeat(400_000),
+      "skills/big/SKILL.md": `---\nname: big\ndescription: Large instructions.\n---\n\n${"a".repeat(2_000_000)}\n`,
+      "skills/big/data.md": "b".repeat(2_000_000),
     },
   });
 
@@ -434,7 +434,7 @@ test("library native install journey: normalized runtime name, preserved origina
   assert.deepEqual([limitRoots.get("skills/many-over")!.fileCount, limitRoots.get("skills/many-at")!.fileCount], [497, 496]);
   assert.ok(limitRoots.get("skills/many-over")!.blockers.some((finding: Json) => finding.code === "limit-exceeded"));
   assert.equal(limitRoots.get("skills/many-at")!.blockers.length, 0);
-  assert.ok(limitRoots.get("skills/big")!.byteCount <= 1_048_576);
+  assert.ok(limitRoots.get("skills/big")!.byteCount <= 5 * 1024 * 1024);
   assert.ok(limitRoots.get("skills/big")!.blockers.some((finding: Json) => finding.code === "limit-exceeded"));
   const limitCandidates = await preview(limitsEntry.id, limitsDiscovery.snapshot.id, ["skills/many-over", "skills/many-at", "skills/big"]);
   await assertBlocked(limitCandidates.get("skills/many-over")!, "limit-exceeded");

@@ -320,7 +320,7 @@ test("Native delivery rejects invalid files, UTF-8 strings and package limits", 
     [{ path: "skill.md", content: "case collision" }],
     [{ path: "invalid.txt", content: "\ud800" }],
     [{ path: "invalid.txt", content: "NUL\0" }],
-    [{ path: "large.txt", content: "x".repeat(1024 * 1024) }],
+    [{ path: "large.txt", content: "x".repeat(MAX_PACKAGE_TEXT_BYTES) }],
     Array.from({ length: 500 }, (_, index) => ({ path: `extra-${index}.txt`, content: "x" })),
   ]) {
     const fixture = nativeFixture({ extra });

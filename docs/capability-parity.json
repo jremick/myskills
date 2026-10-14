@@ -1636,6 +1636,14 @@
               "path": "apps/api/test/submission-routes.test.ts",
               "line": 1
             }
+          },
+          {
+            "level": "contract",
+            "detail": "Text budget is 5 MiB, with separate image limits. API request/artifact and CLI/MCP transfer envelopes are 40 MiB for worst-case JSON escaping plus base64. Size boundary and escaped-envelope tests pass; deploy requires migration 0043 and the updated proxy config.",
+            "source": {
+              "path": "apps/api/test/package-size.e2e.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -12869,6 +12877,14 @@
               "path": "packages/skill-package/test/scan.test.ts",
               "line": 1
             }
+          },
+          {
+            "level": "contract",
+            "detail": "Directory, ZIP and normalized-file boundary tests pass at 5 MiB text and reject overflow. Image bytes use a separate budget; file count and archive limits remain bounded.",
+            "source": {
+              "path": "packages/skill-package/test/package-size.e2e.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -15127,7 +15143,7 @@
     "A status does not certify permission parity across credential kinds.",
     "No production deployment or real ChatGPT/Claude host acceptance in this audit.",
     "All registered business API routes are mapped, including dynamically registered profile/suite routes and OAuth scope routes.",
-    "MCP request body ceiling is 14 MiB plus a 64 KiB JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 10 MiB. These transport limits are not domain or real-host acceptance proof.",
+    "MCP request body ceiling is 40 MiB plus a 64 KiB JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 40 MiB. These transport limits are not domain or real-host acceptance proof.",
     "HOST-01 records standalone operator source and local contract tests. Canonical Compose interpretation/interruption and restored TOTP, recovery-code, authenticated non-owner denial and revoked-session denial are prepared. Fresh install, exact c74ecd33-to-candidate database/runtime upgrade and full-app restore require actual canonical host-rehearsal.json; no new Linux runtime result, external backup durability, public image, deployed behavior or arm64 proof has been recorded here.",
     "Final reconciliation preserves all426 original criterion identities/source descriptors and24 groups with per-ID current bindings. None is declared complete from counts or this matrix. Five QUALITY corrections and HIST adapters require renewed independent source review and exact final canonical acceptance. Local evaluation hardlinks retain the existing bounded regular-file behavior."
   ],

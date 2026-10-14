@@ -7,7 +7,7 @@ import { runComposedArchitectureAcceptance } from "./composed-architecture-accep
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const maximumResponseBytes = 16 * 1024 * 1024;
+const maximumResponseBytes = 40 * 1024 * 1024;
 // Fixed codes from artifact-service.ts and the existing HTTP/CLI boundary.
 const cliFailureCodes = ["API_RATE_LIMITED", "AUTHENTICATION_REQUIRED", "API_TOKEN_SCOPE_REQUIRED", "INVALID_REQUEST_BODY", "CLI_ERROR", "UNEXPECTED_CLI_FAILURE",
   ...["APPROVAL_CONFLICT", "APPROVAL_EXPIRED", "APPROVAL_REQUIRED", "AUTHORITY_REQUIRED", "AUTHORITY_STALE", "BASELINE_CONFLICT", "CAPABILITY_REQUIRED", "CLAIM_ACTOR_REQUIRED", "FEATURE_UNSUPPORTED", "FENCE_LOST", "MAINTENANCE_WINDOW_CLOSED", "NOT_FOUND", "POLICY_DENIED", "READBACK_CONFLICT", "RELEASE_INCOMPATIBLE", "RELEASE_UNAVAILABLE", "REVIEW_REQUIRED", "REVIEW_STALE", "ROLLBACK_DENIED", "STATE_CONFLICT"].map(code => `ARCHITECTURE_ARTIFACT_${code}`)];

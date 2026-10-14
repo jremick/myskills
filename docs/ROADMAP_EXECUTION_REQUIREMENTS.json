@@ -6763,7 +6763,7 @@
         "checks": [
           {
             "path": "apps/api/test/drafts-journey.pgtest.ts",
-            "line": 263,
+            "line": 271,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts"
           },
@@ -6968,7 +6968,7 @@
         "checks": [
           {
             "path": "apps/api/test/drafts-journey.pgtest.ts",
-            "line": 223,
+            "line": 231,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts"
           },
@@ -7617,7 +7617,7 @@
         "checks": [
           {
             "path": "apps/api/test/drafts-journey.pgtest.ts",
-            "line": 245,
+            "line": 253,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts"
           },
@@ -17326,7 +17326,7 @@
         "checks": [
           {
             "path": "apps/api/test/drafts-journey.pgtest.ts",
-            "line": 287,
+            "line": 295,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts"
           },
@@ -17397,7 +17397,7 @@
         "checks": [
           {
             "path": "apps/api/test/drafts-journey.pgtest.ts",
-            "line": 403,
+            "line": 411,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts"
           },
@@ -17614,7 +17614,7 @@
         "checks": [
           {
             "path": "apps/api/test/drafts-journey.pgtest.ts",
-            "line": 245,
+            "line": 253,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts"
           },
@@ -17906,13 +17906,13 @@
         "checks": [
           {
             "path": "apps/api/test/drafts-journey.pgtest.ts",
-            "line": 202,
+            "line": 210,
             "execution": "prepared_not_run_on_final_commit",
             "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts"
           },
           {
             "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
-            "line": 63,
+            "line": 70,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts"
           }

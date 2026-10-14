@@ -119,7 +119,7 @@ const SESSION_COOKIE_NAME = "myskills_session";
 const COOKIE_SESSION_RESPONSE_HEADER = "x-myskills-session-response";
 const REVIEW_ARTIFACT_HASH_HEADER = "x-myskills-artifact-sha256";
 const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
-export const SUBMISSION_BODY_LIMIT_BYTES = 14 * 1024 * 1024;
+export const SUBMISSION_BODY_LIMIT_BYTES = 40 * 1024 * 1024;
 const MCP_SESSION_REQUIRED_SCOPES: readonly ApiTokenScope[] = APPLICATION_SCOPES;
 type TrustProxyOption = NonNullable<FastifyServerOptions["trustProxy"]>;
 

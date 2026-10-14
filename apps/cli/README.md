@@ -208,7 +208,7 @@ The output must end in `.zip` and have an existing parent directory outside
 the source tree. Existing files, directories, symlinks, and symlink ancestors
 are refused. All regular source files are included; there is no ignore file.
 Keep credentials and unrelated files outside the source directory. The package
-limits are 500 files, 1 MiB of text, 1,000 filesystem entries, and a 10 MiB
+limits are 500 files, 5 MiB of text, 1,000 filesystem entries, and a 10 MiB
 archive. PNG, JPEG, WebP and inert SVG assets are supported up to 1 MiB each
 and 5 MiB in total. Other binary files, symlinks, and special files are rejected.
 Text bytes, including BOMs and line

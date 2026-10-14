@@ -15,7 +15,7 @@ Inspection covered the directly relevant library/import roadmap, package validat
 | API/Postgres owns canonical registry state | [Architecture](../ARCHITECTURE.md) |
 | GitHub import and continuous source tracking are planned | [AUTHOR-1](../ROADMAP.md#authoring-and-imports-author-1) |
 | Strict manifest requires SemVer, license and valid slug | [Manifest schema](../../packages/skill-package/src/manifest.ts) |
-| Package limits are 500 files, 1 MiB text and 10 MiB input archive | [Package reader constants](../../packages/skill-package/src/package-path.ts) |
+| Package limits are 500 files, 5 MiB text and 10 MiB input archive | [Package reader constants](../../packages/skill-package/src/package-path.ts) |
 | Submission ownership is currently user-based | [Submission types](../../apps/api/src/submissions/types.ts) |
 | Current organization and target policies combine as constraints | [Policy resolution](../../apps/api/src/upgrade-policies/service.ts), [composition](../../packages/core/src/skill-upgrade-policy.ts) |
 | Cumulative release changes and live policy checks already exist | [Target operations](../../apps/api/src/target-operations/service.ts) |

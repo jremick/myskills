@@ -214,7 +214,7 @@ SourceDiscovery = {
   complete: boolean;                           // false when tree truncated or > 10,000 paths
   skills: DiscoveredSkillRoot[];               // default-selected roots
   excluded: DiscoveredSkillRoot[];             // roots under default-excluded directories
-  limits: { maxInventoryPaths: 10000; maxPackageFiles: 500; maxPackageTextBytes: 1048576 };
+  limits: { maxInventoryPaths: 10000; maxPackageFiles: 500; maxPackageTextBytes: 5242880 };
 }
 DiscoveredSkillRoot = {
   path: string;                 // e.g. "skills/ce-plan"; "" for repository root
