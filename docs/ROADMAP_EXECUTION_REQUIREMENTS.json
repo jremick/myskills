@@ -2439,7 +2439,7 @@
           },
           {
             "path": "apps/api/test/submission-routes.test.ts",
-            "line": 636,
+            "line": 659,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/submission-routes.test.ts"
           }
@@ -2573,7 +2573,7 @@
           },
           {
             "path": "packages/skill-package/src/manifest.ts",
-            "line": 23
+            "line": 24
           },
           {
             "path": "packages/skill-package/src/archive.ts",
@@ -2792,7 +2792,7 @@
           },
           {
             "path": "apps/api/test/submission-routes.test.ts",
-            "line": 75,
+            "line": 98,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/submission-routes.test.ts"
           }
@@ -2859,7 +2859,7 @@
           },
           {
             "path": "apps/api/test/submission-routes.test.ts",
-            "line": 823,
+            "line": 846,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/submission-routes.test.ts"
           }
@@ -3301,7 +3301,7 @@
           },
           {
             "path": "apps/api/test/submission-routes.test.ts",
-            "line": 75,
+            "line": 98,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/submission-routes.test.ts"
           }
@@ -3513,7 +3513,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2418
+            "line": 2419
           }
         ],
         "checks": [
@@ -4112,7 +4112,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2409
+            "line": 2410
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -5574,7 +5574,7 @@
           },
           {
             "path": "packages/skill-package/src/manifest.ts",
-            "line": 23
+            "line": 24
           },
           {
             "path": "packages/skill-package/src/archive.ts",
@@ -5657,7 +5657,7 @@
           },
           {
             "path": "apps/api/test/submission-routes.test.ts",
-            "line": 842,
+            "line": 865,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/submission-routes.test.ts"
           }
@@ -5712,7 +5712,7 @@
           },
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2418
+            "line": 2419
           }
         ],
         "checks": [
@@ -5779,7 +5779,7 @@
           },
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 180
+            "line": 179
           }
         ],
         "checks": [
@@ -5929,7 +5929,7 @@
           },
           {
             "path": "apps/api/test/submission-routes.test.ts",
-            "line": 182,
+            "line": 205,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/submission-routes.test.ts"
           }
@@ -5996,7 +5996,7 @@
           },
           {
             "path": "apps/api/test/submission-routes.test.ts",
-            "line": 182,
+            "line": 205,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/submission-routes.test.ts"
           }
@@ -6185,7 +6185,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2409
+            "line": 2410
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -6341,7 +6341,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2418
+            "line": 2419
           }
         ],
         "checks": [
@@ -6493,7 +6493,7 @@
           },
           {
             "path": "packages/skill-package/src/manifest.ts",
-            "line": 4
+            "line": 5
           },
           {
             "path": "packages/skill-package/src/archive.ts",
@@ -6560,7 +6560,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2418
+            "line": 2419
           }
         ],
         "checks": [
@@ -6623,7 +6623,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 218
+            "line": 217
           }
         ],
         "checks": [
@@ -6686,7 +6686,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2418
+            "line": 2419
           }
         ],
         "checks": [
@@ -12206,7 +12206,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2871
+            "line": 2872
           },
           {
             "path": "apps/mcp/src/application-tools.ts",
@@ -12973,7 +12973,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2088
+            "line": 2089
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -15321,7 +15321,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2409
+            "line": 2410
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -21259,7 +21259,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 218
+            "line": 217
           }
         ],
         "checks": [
@@ -22188,7 +22188,7 @@
           },
           {
             "path": "packages/skill-package/src/manifest.ts",
-            "line": 17
+            "line": 18
           },
           {
             "path": "packages/skill-package/src/archive.ts",
@@ -22375,7 +22375,7 @@
           },
           {
             "path": "apps/api/test/submission-routes.test.ts",
-            "line": 610,
+            "line": 633,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/submission-routes.test.ts"
           }
@@ -22864,7 +22864,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2409
+            "line": 2410
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -22935,7 +22935,7 @@
           },
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 180
+            "line": 179
           }
         ],
         "checks": [
@@ -22998,7 +22998,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2418
+            "line": 2419
           },
           {
             "path": "apps/cli/src/install-filesystem.ts",
@@ -25037,7 +25037,7 @@
         "sources": [
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 218
+            "line": 217
           }
         ],
         "checks": [
@@ -25467,7 +25467,7 @@
           },
           {
             "path": "apps/api/test/submission-routes.test.ts",
-            "line": 842,
+            "line": 865,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/submission-routes.test.ts"
           }
@@ -25534,7 +25534,7 @@
           },
           {
             "path": "apps/api/test/submission-routes.test.ts",
-            "line": 182,
+            "line": 205,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --import tsx --test apps/api/test/submission-routes.test.ts"
           }
@@ -29221,7 +29221,7 @@
           },
           {
             "path": "apps/cli/src/cli.ts",
-            "line": 2522
+            "line": 2523
           }
         ],
         "checks": [

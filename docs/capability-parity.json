@@ -457,7 +457,7 @@
         "detail": "export/install bind the exact release digest, bound streamed bytes by validated size, hash raw bytes, strictly decode UTF-8 and reject redirects.",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1987,
+          "line": 1988,
           "anchor": "async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -1110,7 +1110,7 @@
         "detail": "bundles list/show/members/memberships",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2003,
+          "line": 2004,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1209,7 +1209,7 @@
         "detail": "bundles sources",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2003,
+          "line": 2004,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1311,7 +1311,7 @@
         "detail": "bundles create/edit",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2003,
+          "line": 2004,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1415,7 +1415,7 @@
         "detail": "bundles save",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2003,
+          "line": 2004,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1510,6 +1510,14 @@
               "path": "apps/api/src/package-quality/scan-worker.ts",
               "line": 1
             }
+          },
+          {
+            "level": "contract",
+            "detail": "Missing skill.json is generated from strict root SKILL.md YAML with private visibility; archive and normalized-file submission tests pass, including invalid frontmatter. Existing manifests remain authoritative. No deployed proof.",
+            "source": {
+              "path": "apps/api/test/submission-routes.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -1525,6 +1533,14 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: submit --path. Runtime parity is not implied."
+          },
+          {
+            "level": "contract",
+            "detail": "CLI validate/submit generate a private manifest in the held package snapshot, emit a notice and leave source files unchanged. Missing/malformed metadata and submitted-manifest assertions pass.",
+            "source": {
+              "path": "apps/cli/test/cli.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -9377,7 +9393,7 @@
         "detail": "companion run-once with lease/fence checks",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 3209,
+          "line": 3210,
           "anchor": "async function companionCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12719,6 +12735,14 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: init / validate / scan / package. Runtime parity is not implied."
+          },
+          {
+            "level": "contract",
+            "detail": "Frontmatter-only directory and ZIP intake passes with default version 0.1.0 and private visibility; duplicate keys, aliases, invalid metadata and oversize YAML fail closed.",
+            "source": {
+              "path": "packages/skill-package/test/package-intake.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -12797,7 +12821,7 @@
         "detail": "export/install/list/updates/update/rollback",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2075,
+          "line": 2076,
           "anchor": "async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12882,7 +12906,7 @@
         "detail": "architectures observe/health; bootstrap codex --dry-run",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2541,
+          "line": 2542,
           "anchor": "async function codexWorkspaceCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -13052,7 +13076,7 @@
         "detail": "libraries unbind-local",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2003,
+          "line": 2004,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -18191,7 +18215,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 309
+        "line": 308
       }
     },
     {
@@ -18201,7 +18225,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 310
+        "line": 309
       }
     },
     {
@@ -18211,7 +18235,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 311
+        "line": 310
       }
     },
     {
@@ -18221,7 +18245,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 312
+        "line": 311
       }
     },
     {
@@ -18231,7 +18255,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 315
+        "line": 314
       }
     },
     {
@@ -18241,7 +18265,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 316
+        "line": 315
       }
     },
     {
@@ -18251,7 +18275,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 317
+        "line": 316
       }
     },
     {
@@ -18261,7 +18285,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 320
+        "line": 319
       }
     },
     {
@@ -18271,7 +18295,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 322
+        "line": 321
       }
     },
     {
@@ -18281,7 +18305,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 324
+        "line": 323
       }
     },
     {
@@ -18291,7 +18315,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 326
+        "line": 325
       }
     },
     {
@@ -18301,7 +18325,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 328
+        "line": 327
       }
     },
     {
@@ -18311,7 +18335,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 330
+        "line": 329
       }
     },
     {
@@ -18321,7 +18345,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 332
+        "line": 331
       }
     },
     {
@@ -18331,7 +18355,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 334
+        "line": 333
       }
     },
     {
@@ -18341,7 +18365,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 336
+        "line": 335
       }
     },
     {
@@ -18352,7 +18376,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 338
+        "line": 337
       }
     },
     {
@@ -18362,7 +18386,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 340
+        "line": 339
       }
     },
     {
@@ -18372,7 +18396,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 342
+        "line": 341
       }
     },
     {
@@ -18382,7 +18406,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 344
+        "line": 343
       }
     },
     {
@@ -18402,7 +18426,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 346
+        "line": 345
       }
     },
     {
@@ -18412,7 +18436,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 348
+        "line": 347
       }
     },
     {
@@ -18462,7 +18486,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 356
+        "line": 355
       }
     },
     {
@@ -18475,7 +18499,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 358
+        "line": 357
       }
     },
     {
@@ -18488,7 +18512,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 359
+        "line": 358
       }
     },
     {
@@ -18527,7 +18551,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 361
+        "line": 360
       }
     },
     {
@@ -18566,7 +18590,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 362
+        "line": 361
       }
     },
     {
@@ -18591,7 +18615,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 366
+        "line": 365
       }
     },
     {
@@ -18605,7 +18629,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 368
+        "line": 367
       }
     },
     {
@@ -18624,7 +18648,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 369
+        "line": 368
       }
     },
     {
@@ -18643,7 +18667,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 371
+        "line": 370
       }
     },
     {
@@ -18654,7 +18678,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 373
+        "line": 372
       }
     },
     {
@@ -18664,7 +18688,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 375
+        "line": 374
       }
     },
     {
@@ -18674,7 +18698,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 377
+        "line": 376
       }
     },
     {
@@ -18684,7 +18708,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 379
+        "line": 378
       }
     },
     {
@@ -18694,7 +18718,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 381
+        "line": 380
       }
     },
     {
@@ -18704,7 +18728,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 383
+        "line": 382
       }
     },
     {
@@ -18714,7 +18738,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 3616
+        "line": 3617
       }
     },
     {
@@ -18726,7 +18750,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 3967
+        "line": 3968
       }
     },
     {
@@ -18736,7 +18760,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 391
+        "line": 390
       }
     },
     {
@@ -18833,7 +18857,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 389
+        "line": 388
       }
     },
     {
@@ -18843,7 +18867,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 426
+        "line": 425
       }
     },
     {
@@ -18863,7 +18887,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 298
+        "line": 297
       }
     },
     {
@@ -18873,7 +18897,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 293
+        "line": 292
       }
     },
     {

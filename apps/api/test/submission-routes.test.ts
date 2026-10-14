@@ -72,6 +72,29 @@ test("authors can submit clean packages", async (t) => {
   assert.equal(submissionStore.count(), 1);
 });
 
+for (const source of ["files", "archive"] as const) {
+  test(`frontmatter-only ${source} submission stores a generated private manifest and returns a notice`, async (t) => {
+    const submissionStore = new MemorySubmissionStore();
+    const authStore = new MemoryAuthStore("closed");
+    const app = buildSubmissionApp({ authStore, submissionStore });
+    t.after(() => app.close());
+    const token = await addAndLogin(app, authStore, ["author"]);
+    const files = [{ path: "SKILL.md", content: "---\nname: frontmatter-helper\ndescription: >-\n  Write useful notes\n  from supplied changes.\n---\nUse supplied changes.\n" }];
+    const payload = source === "files" ? { files } : await archiveSubmissionPayload(t, files);
+    const response = await app.inject({ method: "POST", url: "/v1/submissions", headers: { authorization: `Bearer ${token}` }, payload });
+    assert.equal(response.statusCode, 202, response.body);
+    assert.equal(response.json().submission.slug, "frontmatter-helper");
+    assert.equal(response.json().submission.version, "0.1.0");
+    assert.match(response.json().notices[0], /Generated skill\.json from SKILL\.md/);
+    const bundle = await app.inject({ method: "GET", url: `/v1/submissions/${response.json().submission.id}/bundle`, headers: { authorization: `Bearer ${token}` } });
+    assert.equal(bundle.statusCode, 200, bundle.body);
+    const manifest = JSON.parse(bundle.json().files.find((file: { path: string }) => file.path === "skill.json").content);
+    assert.equal(manifest.visibility, "private");
+    assert.equal(manifest.summary, "Write useful notes from supplied changes.");
+    assert.deepEqual(bundle.json().files.find((file: { path: string }) => file.path === "SKILL.md"), files[0]);
+  });
+}
+
 test("authors can list and export their own submitted skill package", async (t) => {
   const submissionStore = new MemorySubmissionStore();
   const authStore = new MemoryAuthStore("closed");

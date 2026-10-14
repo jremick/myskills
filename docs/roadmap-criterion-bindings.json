@@ -1360,7 +1360,7 @@
         {
           "path": "apps/api/src/app.ts",
           "line": 121,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
+          "sha256": "786d8897387208fc1cbd7a82eb0df656c7f2a950f7b0cc3e82f679cf23200198",
           "anchor": "export const SUBMISSION_BODY_LIMIT_BYTES = 14 * 1024 * 1024;"
         },
         {
@@ -1411,7 +1411,7 @@
         {
           "path": "apps/api/src/app.ts",
           "line": 362,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
+          "sha256": "786d8897387208fc1cbd7a82eb0df656c7f2a950f7b0cc3e82f679cf23200198",
           "anchor": "app.get(\"/v1/capabilities\", async () => {"
         },
         {
@@ -1483,8 +1483,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 636,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 659,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"server-local paths, artifact metadata, and unsafe file paths are rejected\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -1501,7 +1501,7 @@
         {
           "path": "apps/api/src/app.ts",
           "line": 121,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
+          "sha256": "786d8897387208fc1cbd7a82eb0df656c7f2a950f7b0cc3e82f679cf23200198",
           "anchor": "export const SUBMISSION_BODY_LIMIT_BYTES = 14 * 1024 * 1024;"
         },
         {
@@ -1563,8 +1563,8 @@
         },
         {
           "path": "packages/skill-package/src/manifest.ts",
-          "line": 23,
-          "sha256": "2e192384bd972414e22ee19cff3a043759afd0e5bb139cde30356a57fad1d7a7",
+          "line": 24,
+          "sha256": "2d57380e361e53e1c31d095c85d7855caa8e29b162f3787f0b2b7575b3515604",
           "anchor": "export const skillManifestSchema = z.object({"
         },
         {
@@ -1603,7 +1603,7 @@
         {
           "path": "apps/api/src/app.ts",
           "line": 941,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
+          "sha256": "786d8897387208fc1cbd7a82eb0df656c7f2a950f7b0cc3e82f679cf23200198",
           "anchor": "app.get(\"/v1/skills\", async (request) => {"
         },
         {
@@ -1706,8 +1706,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 75,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 98,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"authors can list and export their own submitted skill package\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -1745,8 +1745,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 823,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 846,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"submission rejects non-portable filenames before creating registry state\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -2060,8 +2060,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 75,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 98,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"authors can list and export their own submitted skill package\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -2163,8 +2163,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -2535,8 +2535,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2409,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2410,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -3579,8 +3579,8 @@
         },
         {
           "path": "packages/skill-package/src/manifest.ts",
-          "line": 23,
-          "sha256": "2e192384bd972414e22ee19cff3a043759afd0e5bb139cde30356a57fad1d7a7",
+          "line": 24,
+          "sha256": "2d57380e361e53e1c31d095c85d7855caa8e29b162f3787f0b2b7575b3515604",
           "anchor": "export const skillManifestSchema = z.object({"
         },
         {
@@ -3640,8 +3640,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 842,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 865,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"new versions must use the existing skill's visibility at submission\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3663,8 +3663,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -3702,8 +3702,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 180,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 179,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "text(): Promise<string>;"
         }
       ],
@@ -3802,8 +3802,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 182,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 205,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"submission detail exposes review reasons and scan evidence only to its author or a reviewer\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3841,8 +3841,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 182,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 205,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"submission detail exposes review reasons and scan evidence only to its author or a reviewer\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3926,7 +3926,7 @@
         {
           "path": "apps/api/test/submission-routes.test.ts",
           "line": 51,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"authors can submit clean packages\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3942,8 +3942,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2409,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2410,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -4050,8 +4050,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4154,8 +4154,8 @@
         },
         {
           "path": "packages/skill-package/src/manifest.ts",
-          "line": 4,
-          "sha256": "2e192384bd972414e22ee19cff3a043759afd0e5bb139cde30356a57fad1d7a7",
+          "line": 5,
+          "sha256": "2d57380e361e53e1c31d095c85d7855caa8e29b162f3787f0b2b7575b3515604",
           "anchor": "export const skillSlugSchema = z"
         },
         {
@@ -4193,8 +4193,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4226,8 +4226,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 218,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 217,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -4259,8 +4259,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -7541,7 +7541,7 @@
         {
           "path": "apps/cli/src/cli.ts",
           "line": 1592,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertCodexObservationOptions(parsed, healthOnly);"
         },
         {
@@ -7702,8 +7702,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2871,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2872,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "preflightScopeEnrollment(initialState, provider, scope, location.path);"
         },
         {
@@ -8228,8 +8228,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2088,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2089,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertLibraryVersion(libraryResolution, version);"
         },
         {
@@ -9650,8 +9650,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2409,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2410,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -13614,8 +13614,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 218,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 217,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -14241,8 +14241,8 @@
         },
         {
           "path": "packages/skill-package/src/manifest.ts",
-          "line": 17,
-          "sha256": "2e192384bd972414e22ee19cff3a043759afd0e5bb139cde30356a57fad1d7a7",
+          "line": 18,
+          "sha256": "2d57380e361e53e1c31d095c85d7855caa8e29b162f3787f0b2b7575b3515604",
           "anchor": "export const platformVariantSchema = z.object({"
         },
         {
@@ -14378,8 +14378,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 610,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 633,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"duplicate slug and version are rejected\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14667,8 +14667,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2409,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2410,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
@@ -14712,8 +14712,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 180,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 179,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "text(): Promise<string>;"
         }
       ],
@@ -14745,8 +14745,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         },
         {
@@ -16077,8 +16077,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 218,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 217,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -16349,8 +16349,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 842,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 865,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"new versions must use the existing skill's visibility at submission\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -16388,8 +16388,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 182,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 205,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"submission detail exposes review reasons and scan evidence only to its author or a reviewer\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18847,8 +18847,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2522,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2523,
+          "sha256": "d512c33490d96d78419e29864faad3e3f58998d7ee6ca5f6dde486abb0dcf258",
           "anchor": "assertMatchingProvenance(binding,provenance);"
         }
       ],

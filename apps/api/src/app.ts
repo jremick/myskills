@@ -18,7 +18,7 @@ import { AppError, APPLICATION_SCOPES, createArchitectureDiagramArtifact, parseS
 import {
   MAX_PACKAGE_ARCHIVE_BYTES,
   MAX_PACKAGE_FILES,
-  loadSkillManifestFromPackageFiles,
+  preparePackageManifest,
   PackageManifestFileError,
   parseSkillManifest,
   readPackageFilesFromZipBuffer,
@@ -2400,7 +2400,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       files: input.files,
       release: input.release,
     });
-    return reply.code(202).send(submissionResponse(submission));
+    return reply.code(202).send({ ...submissionResponse(submission), ...(input.notices.length ? { notices: input.notices } : {}) });
   });
 
   app.get("/v1/review/submissions", async (request, reply) => {
@@ -4183,6 +4183,7 @@ async function parseSubmissionInput(input: unknown): Promise<{
   manifest: ReturnType<typeof parseSkillManifest>;
   files: PackageInputFile[];
   release: SkillReleaseMetadata;
+  notices: string[];
 }> {
   const body = parseJsonObject(input);
   rejectServerManagedSubmissionFields(body);
@@ -4207,11 +4208,8 @@ async function parseSubmissionInput(input: unknown): Promise<{
     } catch (error) {
       throw new AppError(error instanceof Error ? error.message : "Invalid package archive.", "INVALID_PACKAGE_ARCHIVE", 400);
     }
-    return {
-      manifest: parseSubmissionManifest(body.manifest, files, { optional: true }),
-      files,
-      release,
-    };
+    const prepared = prepareSubmissionFiles(files);
+    return { ...prepared, manifest: parseSubmissionManifest(body.manifest, prepared.manifest), release };
   }
 
   if (!Array.isArray(body.files)) {
@@ -4235,17 +4233,12 @@ async function parseSubmissionInput(input: unknown): Promise<{
     };
   });
 
-  return {
-    manifest: parseSubmissionManifest(body.manifest, files, { optional: false }),
-    files,
-    release,
-  };
+  const prepared = prepareSubmissionFiles(files);
+  return { ...prepared, manifest: parseSubmissionManifest(body.manifest, prepared.manifest), release };
 }
 
-function parseSubmissionManifest(input: unknown, files: PackageInputFile[], options: { optional: boolean }): ReturnType<typeof parseSkillManifest> {
-  if (input === undefined && options.optional) {
-    return manifestFromPackageFiles(files);
-  }
+function parseSubmissionManifest(input: unknown, packageManifest: ReturnType<typeof parseSkillManifest>): ReturnType<typeof parseSkillManifest> {
+  if (input === undefined) return packageManifest;
   try {
     return parseSkillManifest(input);
   } catch {
@@ -4253,14 +4246,14 @@ function parseSubmissionManifest(input: unknown, files: PackageInputFile[], opti
   }
 }
 
-function manifestFromPackageFiles(files: PackageInputFile[]): ReturnType<typeof parseSkillManifest> {
+function prepareSubmissionFiles(files: PackageInputFile[]): ReturnType<typeof preparePackageManifest> {
   try {
-    return loadSkillManifestFromPackageFiles(files);
+    return preparePackageManifest(files);
   } catch (error) {
     if (error instanceof PackageManifestFileError) {
       throw new AppError(error.message, error.code, 400);
     }
-    throw new AppError(error instanceof Error ? error.message : "Invalid package archive.", "INVALID_PACKAGE_ARCHIVE", 400);
+    throw new AppError(error instanceof Error ? error.message : "Invalid package payload.", "INVALID_PACKAGE_PAYLOAD", 400);
   }
 }
 

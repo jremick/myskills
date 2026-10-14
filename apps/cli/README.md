@@ -325,7 +325,9 @@ Use the resulting tarball for a fresh isolated installation, or run the bundle
 directly. The release gate verifies the packed executable and Apache license.
 Public npm publication is a separate release step.
 
-`validate`, `scan`, and `submit` accept a manifest file, package directory, or local `.zip` package. `login` prompts for the API URL when one is not supplied; the default is the local API at `http://localhost:3001`, and custom hosted URLs can be entered manually. Successful login stores the selected API URL in local CLI config so later commands can omit `--api-url`. API URL resolution is `--api-url`, then `MYSKILLS_API_URL`, then saved config, then `http://localhost:3001`.
+`validate`, `scan`, and `submit` accept a manifest file, package directory, or local `.zip` package. When no supported root manifest exists, `validate` and `submit` generate `skill.json` in the package snapshot from the root `SKILL.md` YAML frontmatter and print a notice to stderr. The source directory or ZIP stays unchanged. `name` and `description` are required. Generated metadata uses private visibility, version `0.1.0` (unless `version` or `metadata.version` is supplied), `UNLICENSED`, and the `codex-skill` platform target by default. Optional `title`, `license`, `platforms`, and `tags` are preserved; the summary uses the first 500 characters of the description. Invalid existing manifests still fail validation. API submission intake applies the same generation to files and ZIP uploads, stores the generated file with the artifact, and returns a `notices` array when generation occurs.
+
+`login` prompts for the API URL when one is not supplied; the default is the local API at `http://localhost:3001`, and custom hosted URLs can be entered manually. Successful login stores the selected API URL in local CLI config so later commands can omit `--api-url`. API URL resolution is `--api-url`, then `MYSKILLS_API_URL`, then saved config, then `http://localhost:3001`.
 
 `login` supports email/password, API-key and browser/device flows. Password
 login handles MFA challenges and stores the verified session token. API-key

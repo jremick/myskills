@@ -1,5 +1,6 @@
 export * from "./manifest.js";
 export * from "./package-path.js";
+export * from "./package-intake.js";
 export * from "./scan.js";
 export * from "./archive.js";
 
