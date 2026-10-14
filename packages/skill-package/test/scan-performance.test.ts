@@ -14,6 +14,8 @@ for (const name of [
   "download-positive",
   "decode-positive",
   "url-positive",
+  "negated-transfer",
+  "service-auth-prose",
 ]) {
   test(`bounds scanner work for ${name} through the package text limit`, (t) => {
     // A test-runner timeout cannot interrupt a synchronous regex. Kill a child

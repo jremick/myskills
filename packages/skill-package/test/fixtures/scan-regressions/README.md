@@ -1,0 +1,1 @@
+Scanner regression samples supplied from /tmp/fp. These files are read as text and are never executed. The organization-specific 1Password account default, installer name and shared package organization name were replaced with example values; credential handling and request examples are otherwise unchanged.

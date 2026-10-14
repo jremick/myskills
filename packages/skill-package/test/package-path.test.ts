@@ -24,7 +24,7 @@ import { writeStoredZip } from "../../../test-support/zip-fixture.js";
 
 test("exports stable package manifest and scanner contract identifiers", () => {
   assert.equal(SKILL_PACKAGE_MANIFEST_CONTRACT_ID, "myskills.skill-package.manifest.strict-root.v1");
-  assert.equal(SKILL_PACKAGE_SCANNER_CONTRACT_ID, "myskills.skill-package.scanner.text-risk.v1");
+  assert.equal(SKILL_PACKAGE_SCANNER_CONTRACT_ID, "myskills.skill-package.scanner.text-risk.v2");
 });
 
 test("loads a skill manifest from a package directory", async (t) => {

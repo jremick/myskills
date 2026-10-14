@@ -12861,6 +12861,14 @@
               "path": "packages/skill-package/test/package-intake.test.ts",
               "line": 1
             }
+          },
+          {
+            "level": "contract",
+            "detail": "Scanner regression fixtures copied from the seven requested /tmp/fp files produce no credential-exfiltration finding. Direct named-token authentication to its matching static HTTPS service is allowed; variable/unrelated hosts, environment dumps and encoded sends remain flagged. Scanner contract advances to v2 so cached assessments refresh. Bounded static analysis is not a full program proof.",
+            "source": {
+              "path": "packages/skill-package/test/scan.test.ts",
+              "line": 1
+            }
           }
         ]
       },

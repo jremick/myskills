@@ -1552,13 +1552,13 @@
         {
           "path": "packages/skill-package/src/package-path.ts",
           "line": 21,
-          "sha256": "d9702bc90c09f3d43d21cabb518095f5dc142a10ab1a43855b3604d5616e3858",
+          "sha256": "98ac66684e44731ded966c1229e41f95d43bacca3a262e11c7dda653e15fa7c5",
           "anchor": "export const SKILL_PACKAGE_MANIFEST_CONTRACT_ID = \"myskills.skill-package.manifest.strict-root.v1\" as const;"
         },
         {
           "path": "packages/skill-package/src/scan.ts",
-          "line": 36,
-          "sha256": "c5dd028bd040242ed2414a5049605ccad900bc304b12583631ae6f5db610e4b7",
+          "line": 31,
+          "sha256": "a879cb87aa6c59279ebe2aa76b58f28ba041ea6900951eab4d952655d40fa0dd",
           "anchor": "export function scanTextForPackageRisks(text: string): ScanFinding[] {"
         },
         {
@@ -1578,7 +1578,7 @@
         {
           "path": "packages/skill-package/test/package-path.test.ts",
           "line": 25,
-          "sha256": "bbd442ace72299a2e117fda6fe57a378f3edc40d92d96a6be4d488ee7b8b2a62",
+          "sha256": "0fdc0658f3fc97755569385b9b24b448061f7eb90546ab6704ef4ac93f8a5840",
           "anchor": "test(\"exports stable package manifest and scanner contract identifiers\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/package-path.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -1586,7 +1586,7 @@
         {
           "path": "packages/skill-package/test/scan.test.ts",
           "line": 20,
-          "sha256": "ea86590780223201b4eb5c77405665ca929fc06ad9d754cbb5f808d87939fd28",
+          "sha256": "e3f9e1fece7883e44278da15a9895ad57e6b4e8698731c78f898418fd8d2c26f",
           "anchor": "test(\"flags destructive shell snippets\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/scan.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3568,13 +3568,13 @@
         {
           "path": "packages/skill-package/src/package-path.ts",
           "line": 10,
-          "sha256": "d9702bc90c09f3d43d21cabb518095f5dc142a10ab1a43855b3604d5616e3858",
+          "sha256": "98ac66684e44731ded966c1229e41f95d43bacca3a262e11c7dda653e15fa7c5",
           "anchor": "export const DEFAULT_MANIFEST_NAMES = [\"skill.json\", \"skill-manifest.json\", \"ai-skill.json\"] as const;"
         },
         {
           "path": "packages/skill-package/src/scan.ts",
           "line": 10,
-          "sha256": "c5dd028bd040242ed2414a5049605ccad900bc304b12583631ae6f5db610e4b7",
+          "sha256": "a879cb87aa6c59279ebe2aa76b58f28ba041ea6900951eab4d952655d40fa0dd",
           "anchor": "export const MAX_SCAN_TEXT_LENGTH = 1024 * 1024;"
         },
         {
@@ -3594,7 +3594,7 @@
         {
           "path": "packages/skill-package/test/package-path.test.ts",
           "line": 25,
-          "sha256": "bbd442ace72299a2e117fda6fe57a378f3edc40d92d96a6be4d488ee7b8b2a62",
+          "sha256": "0fdc0658f3fc97755569385b9b24b448061f7eb90546ab6704ef4ac93f8a5840",
           "anchor": "test(\"exports stable package manifest and scanner contract identifiers\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/package-path.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3602,7 +3602,7 @@
         {
           "path": "packages/skill-package/test/scan.test.ts",
           "line": 6,
-          "sha256": "ea86590780223201b4eb5c77405665ca929fc06ad9d754cbb5f808d87939fd28",
+          "sha256": "e3f9e1fece7883e44278da15a9895ad57e6b4e8698731c78f898418fd8d2c26f",
           "anchor": "test(\"flags secret-looking package text\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/scan.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4143,13 +4143,13 @@
         {
           "path": "packages/skill-package/src/package-path.ts",
           "line": 338,
-          "sha256": "d9702bc90c09f3d43d21cabb518095f5dc142a10ab1a43855b3604d5616e3858",
+          "sha256": "98ac66684e44731ded966c1229e41f95d43bacca3a262e11c7dda653e15fa7c5",
           "anchor": "export function validatePackageFiles(files: readonly PackageInputFile[]): PackageFileValidationResult {"
         },
         {
           "path": "packages/skill-package/src/scan.ts",
-          "line": 36,
-          "sha256": "c5dd028bd040242ed2414a5049605ccad900bc304b12583631ae6f5db610e4b7",
+          "line": 31,
+          "sha256": "a879cb87aa6c59279ebe2aa76b58f28ba041ea6900951eab4d952655d40fa0dd",
           "anchor": "export function scanTextForPackageRisks(text: string): ScanFinding[] {"
         },
         {
@@ -4169,7 +4169,7 @@
         {
           "path": "packages/skill-package/test/package-path.test.ts",
           "line": 283,
-          "sha256": "bbd442ace72299a2e117fda6fe57a378f3edc40d92d96a6be4d488ee7b8b2a62",
+          "sha256": "0fdc0658f3fc97755569385b9b24b448061f7eb90546ab6704ef4ac93f8a5840",
           "anchor": "test(\"validation-only payload checks reject malformed paths, text and collisions\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/package-path.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4177,7 +4177,7 @@
         {
           "path": "packages/skill-package/test/scan.test.ts",
           "line": 20,
-          "sha256": "ea86590780223201b4eb5c77405665ca929fc06ad9d754cbb5f808d87939fd28",
+          "sha256": "e3f9e1fece7883e44278da15a9895ad57e6b4e8698731c78f898418fd8d2c26f",
           "anchor": "test(\"flags destructive shell snippets\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/scan.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14230,13 +14230,13 @@
         {
           "path": "packages/skill-package/src/package-path.ts",
           "line": 10,
-          "sha256": "d9702bc90c09f3d43d21cabb518095f5dc142a10ab1a43855b3604d5616e3858",
+          "sha256": "98ac66684e44731ded966c1229e41f95d43bacca3a262e11c7dda653e15fa7c5",
           "anchor": "export const DEFAULT_MANIFEST_NAMES = [\"skill.json\", \"skill-manifest.json\", \"ai-skill.json\"] as const;"
         },
         {
           "path": "packages/skill-package/src/scan.ts",
           "line": 10,
-          "sha256": "c5dd028bd040242ed2414a5049605ccad900bc304b12583631ae6f5db610e4b7",
+          "sha256": "a879cb87aa6c59279ebe2aa76b58f28ba041ea6900951eab4d952655d40fa0dd",
           "anchor": "export const MAX_SCAN_TEXT_LENGTH = 1024 * 1024;"
         },
         {
@@ -14256,7 +14256,7 @@
         {
           "path": "packages/skill-package/test/package-path.test.ts",
           "line": 344,
-          "sha256": "bbd442ace72299a2e117fda6fe57a378f3edc40d92d96a6be4d488ee7b8b2a62",
+          "sha256": "0fdc0658f3fc97755569385b9b24b448061f7eb90546ab6704ef4ac93f8a5840",
           "anchor": "test(\"rejects unsafe package payload paths\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/package-path.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14264,7 +14264,7 @@
         {
           "path": "packages/skill-package/test/scan.test.ts",
           "line": 6,
-          "sha256": "ea86590780223201b4eb5c77405665ca929fc06ad9d754cbb5f808d87939fd28",
+          "sha256": "e3f9e1fece7883e44278da15a9895ad57e6b4e8698731c78f898418fd8d2c26f",
           "anchor": "test(\"flags secret-looking package text\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/scan.test.ts",
           "execution": "prepared_not_run_on_final_commit"

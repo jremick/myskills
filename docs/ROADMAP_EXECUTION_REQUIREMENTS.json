@@ -2569,7 +2569,7 @@
           },
           {
             "path": "packages/skill-package/src/scan.ts",
-            "line": 36
+            "line": 31
           },
           {
             "path": "packages/skill-package/src/manifest.ts",
@@ -6489,7 +6489,7 @@
           },
           {
             "path": "packages/skill-package/src/scan.ts",
-            "line": 36
+            "line": 31
           },
           {
             "path": "packages/skill-package/src/manifest.ts",
