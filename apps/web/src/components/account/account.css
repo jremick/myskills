@@ -211,7 +211,6 @@ main.account-workspace {
 .account-workspace .role-toggle small { color: var(--muted); font-size: 12.5px; line-height: 18px; font-weight: 400; }
 .account-workspace .role-toggle input:disabled + span { color: var(--muted); }
 
-/* Instance */
 .account-workspace .account-posture { max-width: 72ch; color: var(--ink-soft); font-size: 14px; line-height: 20px; }
 .account-workspace .account-posture strong { color: var(--ink); font-weight: 600; }
 .account-workspace .account-segmented { display: flex; flex-wrap: wrap; gap: 8px; }
