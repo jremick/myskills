@@ -898,7 +898,8 @@ test("release delete confirms from a reason and stays apart from restore", async
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper?version=0.2.0", owner);
   const fixture = releaseHistoryFixture();
   fixture.skill = { ...fixture.skill, access: { canManageSharing: true, reasons: ["owner", "public"] } };
-  const current = { ...releaseSummary(fixture.latest), allowedActions: ["restore", "delete", "revoke"] as const };
+  const allowedActions: SkillReleaseSummary["allowedActions"] = ["restore", "delete", "revoke"];
+  const current = { ...releaseSummary(fixture.latest), allowedActions };
   const client = historyClient(fixture, { user: owner, releaseListLoader: () => [current] });
   client.getManagedSkill = async () => managedSummary(fixture.skill, ["edit"]);
   const view = render(<RegistryApp client={client} />);
@@ -2344,6 +2345,63 @@ test("non-owner admin sessions cannot edit privileged target role controls", asy
   await view.findByRole("button", { name: "Refresh" });
   assert.equal((view.getByLabelText("Set owner@example.com maintainer role") as HTMLInputElement).disabled, true);
   assert.equal((view.getByLabelText("Set author@example.com maintainer role") as HTMLInputElement).disabled, false);
+});
+
+test("instance role checkboxes describe and group each role", async () => {
+  const owner = authUser({ email: "owner@example.com", roles: ["owner"] });
+  setupAuthenticatedDom("http://localhost/admin", owner);
+  const client = mockClient({ user: owner });
+  const view = render(<RegistryApp client={client} />);
+  await view.findByRole("heading", { name: "Admin console" });
+  const group = await view.findByRole("group", { name: "Roles for author@example.com" });
+  assert.deepEqual(within(group).getAllByRole("heading").map((heading) => heading.textContent), [
+    "Instance control",
+    "Review",
+    "Authoring",
+    "Everyone",
+  ]);
+  const boxes = within(group).getAllByRole("checkbox") as HTMLInputElement[];
+  assert.deepEqual(boxes.map((box) => box.type), ["checkbox", "checkbox", "checkbox", "checkbox", "checkbox"]);
+  assert.equal(within(group).queryByRole("switch"), null);
+  assert.deepEqual(boxes.map((box) => box.getAttribute("aria-label")), [
+    "Set author@example.com owner role",
+    "Set author@example.com admin role",
+    "Set author@example.com maintainer role",
+    "Set author@example.com author role",
+    "Set author@example.com user role",
+  ]);
+  const sentences = [
+    "Manage the instance, including owner and admin roles and sharing. Also review, publish, and submit. The last active owner cannot lose this role. Requires MFA.",
+    "Manage users, registration, providers, branding, and audit. Also review, publish, and submit. Cannot change owner or admin roles. Requires MFA.",
+    "Review, approve, publish, and manage skills, and submit packages. Requires MFA.",
+    "Create drafts and submit packages. Cannot review or administer the instance.",
+    "Sign in and use skills shared with you. Cannot submit, review, or administer the instance.",
+  ];
+  const headings = within(group).getAllByRole("heading");
+  assert.equal(follows(headings[0]!, boxes[0]!) && follows(boxes[1]!, headings[1]!), true);
+  assert.equal(follows(headings[1]!, boxes[2]!) && follows(boxes[2]!, headings[2]!), true);
+  assert.equal(follows(headings[2]!, boxes[3]!) && follows(boxes[3]!, headings[3]!), true);
+  assert.equal(follows(headings[3]!, boxes[4]!), true);
+  sentences.forEach((sentence, index) => {
+    assert.equal(within(group).getByText(sentence).textContent, sentence);
+    const described = document.getElementById(boxes[index]?.getAttribute("aria-describedby") ?? "");
+    assert.equal(described?.textContent, sentence);
+  });
+  const author = view.getByLabelText("Set author@example.com author role") as HTMLInputElement;
+  assert.equal(author.disabled, true);
+  const maintainer = view.getByLabelText("Set author@example.com maintainer role") as HTMLInputElement;
+  assert.equal(maintainer.disabled, false);
+  assert.equal(maintainer.checked, false);
+  fireEvent.click(maintainer);
+  const save = await view.findByRole("button", { name: "Save role change" }) as HTMLButtonElement;
+  const reason = view.getByLabelText("Reason (required)");
+  fireEvent.input(reason, { target: { value: "no" } });
+  assert.equal(save.disabled, true);
+  fireEvent.input(reason, { target: { value: "hold" } });
+  assert.equal(save.disabled, false);
+  fireEvent.click(save);
+  await waitFor(() => assert.deepEqual(client.roleUpdates, ["user-2:maintainer,author:hold"]));
+  await waitFor(() => assert.equal((view.getByLabelText("Set author@example.com maintainer role") as HTMLInputElement).checked, true));
 });
 
 test("admin invitation controls stay unavailable without an MFA-verified session", async () => {
@@ -4008,6 +4066,11 @@ function detailValue(scope: HTMLElement, label: string): string {
 
 function detailLabel(scope: HTMLElement, label: string): HTMLElement | null {
   return within(scope).queryByText(label, { selector: "dt" });
+}
+
+function follows(before: HTMLElement, after: HTMLElement): boolean {
+  const following = 4;
+  return (before.compareDocumentPosition(after) & following) === following;
 }
 
 function historyClient(fixture: ReturnType<typeof releaseHistoryFixture>, options: Parameters<typeof mockClient>[0] = {}) {

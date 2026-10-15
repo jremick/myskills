@@ -5071,23 +5071,33 @@ function RoleEditor({
   roles: string[];
   userEmail: string;
 }) {
+  const baseId = useId();
   return (
     <div aria-label={`Roles for ${userEmail}`} className="role-editor" role="group">
-      {ADMIN_ROLE_OPTIONS.map((role) => {
+      {ADMIN_ROLE_OPTIONS.map((role, index) => {
         const privilegedRole = role === "owner" || role === "admin";
         const removingLastRole = roles.length === 1 && roles.includes(role);
         const roleDisabled = disabled || removingLastRole || (privilegedRole && !canEditPrivilegedRoles);
+        const group = INSTANCE_ROLE_GROUPS[role];
+        const previous = index === 0 ? null : INSTANCE_ROLE_GROUPS[ADMIN_ROLE_OPTIONS[index - 1]!];
         return (
-          <label className="role-toggle" key={role}>
-            <input
-              aria-label={`Set ${userEmail} ${role} role`}
-              checked={roles.includes(role)}
-              disabled={roleDisabled}
-              onChange={() => onChange(toggleRole(roles, role))}
-              type="checkbox"
-            />
-            <span>{formatStatusLabel(role)}</span>
-          </label>
+          <Fragment key={role}>
+            {group !== previous && <h3 className="role-group-heading">{group}</h3>}
+            <label className="role-toggle">
+              <input
+                aria-describedby={`${baseId}-${role}`}
+                aria-label={`Set ${userEmail} ${role} role`}
+                checked={roles.includes(role)}
+                disabled={roleDisabled}
+                onChange={() => onChange(toggleRole(roles, role))}
+                type="checkbox"
+              />
+              <span>
+                <span>{formatStatusLabel(role)}</span>
+                <small id={`${baseId}-${role}`}>{INSTANCE_ROLE_DESCRIPTIONS[role]}</small>
+              </span>
+            </label>
+          </Fragment>
         );
       })}
     </div>
@@ -6748,7 +6758,24 @@ function connectErrorFromLocation(): string | null {
   return /^[a-z_]{1,40}$/.test(error) ? error : "invalid_request";
 }
 const MAX_WEB_ARCHIVE_BYTES = 10 * 1024 * 1024;
-const ADMIN_ROLE_OPTIONS = ["owner", "admin", "maintainer", "author", "user"];
+const ADMIN_ROLE_OPTIONS = ["owner", "admin", "maintainer", "author", "user"] as const;
+type InstanceRole = (typeof ADMIN_ROLE_OPTIONS)[number];
+
+const INSTANCE_ROLE_GROUPS: Record<InstanceRole, string> = {
+  owner: "Instance control",
+  admin: "Instance control",
+  maintainer: "Review",
+  author: "Authoring",
+  user: "Everyone",
+};
+
+const INSTANCE_ROLE_DESCRIPTIONS: Record<InstanceRole, string> = {
+  owner: "Manage the instance, including owner and admin roles and sharing. Also review, publish, and submit. The last active owner cannot lose this role. Requires MFA.",
+  admin: "Manage users, registration, providers, branding, and audit. Also review, publish, and submit. Cannot change owner or admin roles. Requires MFA.",
+  maintainer: "Review, approve, publish, and manage skills, and submit packages. Requires MFA.",
+  author: "Create drafts and submit packages. Cannot review or administer the instance.",
+  user: "Sign in and use skills shared with you. Cannot submit, review, or administer the instance.",
+};
 
 function readStoredSession(): WebSession | null {
   try {
