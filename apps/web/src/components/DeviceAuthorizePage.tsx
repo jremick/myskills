@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState, type FormEvent } from "react";
+import { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
 import type { DeviceLoginClient } from "../device-login-api.js";
 import {
   SIGN_IN_TEXT,
@@ -32,6 +32,10 @@ export function DeviceAuthorizePage({
     hasClient: Boolean(client),
     draft: readDeviceDraft(),
   }));
+  const [verified, setVerified] = useState(false);
+  const profilePending = useRef(false);
+  const stepUpRef = useRef(stepUp);
+  stepUpRef.current = stepUp;
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [signedOutCode, setSignedOutCode] = useState(() => {
@@ -58,8 +62,19 @@ export function DeviceAuthorizePage({
     const userCode = inspectCode(model);
     if (!userCode) return;
     let active = true;
-    client.inspect(userCode).then((consent) => {
-      if (active) dispatch({ type: "inspected", userCode, consent });
+    async function inspect() {
+      if (profilePending.current) {
+        await stepUpRef.current.refreshProfile?.();
+        profilePending.current = false;
+      }
+      if (!client || !userCode) throw new Error("Device request unavailable.");
+      return client.inspect(userCode);
+    }
+    inspect().then((consent) => {
+      if (active) {
+        setVerified(false);
+        dispatch({ type: "inspected", userCode, consent });
+      }
     }).catch((error: unknown) => {
       if (active) dispatch({ type: "inspect_failed", message: messageOf(error) });
     });
@@ -114,6 +129,8 @@ export function DeviceAuthorizePage({
     try {
       await stepUp.verify({ challengeToken, code: otp });
       setOtp("");
+      setVerified(true);
+      profilePending.current = true;
       dispatch({ type: "verified" });
     } catch (error) {
       dispatch({ type: "step_up_failed", message: messageOf(error) });
@@ -149,7 +166,7 @@ export function DeviceAuthorizePage({
           ) : model.kind === "done" ? (
             <p role="status">CLI access {model.outcome}. Return to the terminal.</p>
           ) : (
-            <ConsentPanel model={model} otp={otp} password={password} onDecide={(decision) => void decide(decision)} onOtp={setOtp} onPassword={setPassword} onRecheck={() => dispatch({ type: "recheck" })} onSubmitOtp={(event) => void submitOtp(event)} onSubmitPassword={(event) => void submitPassword(event)} />
+            <ConsentPanel verified={verified} onRestart={() => { setOtp(""); setPassword(""); setVerified(false); dispatch({ type: "restart_verification" }); }} model={model} otp={otp} password={password} onDecide={(decision) => void decide(decision)} onOtp={setOtp} onPassword={setPassword} onRecheck={() => dispatch({ type: "recheck" })} onSubmitOtp={(event) => void submitOtp(event)} onSubmitPassword={(event) => void submitPassword(event)} />
           )}
         </section>
       </main>
@@ -158,6 +175,8 @@ export function DeviceAuthorizePage({
 }
 
 function ConsentPanel({
+  verified,
+  onRestart,
   model,
   otp,
   password,
@@ -168,6 +187,8 @@ function ConsentPanel({
   onSubmitOtp,
   onSubmitPassword,
 }: {
+  verified: boolean;
+  onRestart: () => void;
   model: Extract<DeviceModel, { kind: "review" | "verify" | "enroll" }>;
   otp: string;
   password: string;
@@ -188,7 +209,7 @@ function ConsentPanel({
       <p>The CLI requests these permissions:</p>
       <ul>{devicePermissionLines(model.consent.scopes).map((line) => <li key={line.key}>{line.text}</li>)}</ul>
       <p>Request expires: {new Date(model.consent.expiresAt).toLocaleString()}</p>
-      {model.kind === "verify" && model.inflight !== "inspect" && (
+      {model.kind === "verify" && !verified && model.inflight !== "inspect" && (
         model.challengeToken === null ? (
           <form className="auth-widget auth-form" onSubmit={onSubmitPassword}>
             <p>{SIGN_IN_TEXT.deviceVerify}</p>
@@ -205,9 +226,11 @@ function ConsentPanel({
               <Input className="auth-input" id="device-otp" autoComplete="one-time-code" value={otp} onChange={(event) => onOtp(event.target.value)} disabled={model.inflight !== null} />
             </label>
             <Button type="submit" disabled={model.inflight !== null || !otp.trim()}>Verify</Button>
+            <Button type="button" disabled={model.inflight !== null} onClick={onRestart}>Start verification again</Button>
           </form>
         )
       )}
+      {model.kind === "verify" && verified && model.inflight === null && <Button onClick={onRecheck}>Check again</Button>}
       {model.inflight === "inspect" && <p role="status">Checking permissions…</p>}
       {model.kind === "enroll" && (
         <>

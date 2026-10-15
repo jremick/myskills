@@ -125,21 +125,12 @@ export function checkNewPassword(password: string, confirm: string): PasswordChe
   return { ok: true };
 }
 
-// The hash is removed in this turn. The map is what a StrictMode remount reads.
-const recoveryTokens = new Map<string, string>();
-
 export function captureAuthActionToken(pathname: string): string | null {
-  const fromHash = typeof window === "undefined" ? null : tokenFromHash(window.location.hash);
-  if (fromHash) {
-    recoveryTokens.set(pathname, fromHash);
-    stripRecoveryHash();
-    return fromHash;
-  }
-  return recoveryTokens.get(pathname) ?? null;
+  return typeof window !== "undefined" && window.location.pathname === pathname ? tokenFromHash(window.location.hash) : null;
 }
 
 export function discardRecoveryToken(pageKey: string): void {
-  recoveryTokens.delete(pageKey);
+  if (typeof window !== "undefined" && window.location.pathname === pageKey) stripRecoveryHash();
 }
 
 function tokenFromHash(hash: string): string | null {
@@ -275,6 +266,7 @@ function resendPanel(kind: RecoveryKind): ResendPanel {
 export type DeviceStepUp = {
   login(input: { email: string; password: string }): Promise<StepUpLogin>;
   verify(input: { challengeToken: string; code: string }): Promise<void>;
+  refreshProfile?(): Promise<void>;
 };
 
 export type DeviceApproval = "open" | "verify" | "enroll";
@@ -330,6 +322,7 @@ export type DeviceEvent =
   | { type: "step_up_failed"; message: string }
   | { type: "submit_otp" }
   | { type: "verified" }
+  | { type: "restart_verification" }
   | { type: "recheck" };
 
 export type DeviceDraft =
@@ -442,6 +435,8 @@ export function reduceDevice(model: DeviceModel, event: DeviceEvent): DeviceMode
       return model.kind === "verify" && model.challengeToken !== null && model.inflight === null ? { ...model, inflight: "verify" } : model;
     case "verified":
       return model.kind === "verify" && model.inflight === "verify" ? { ...model, challengeToken: null, inflight: "inspect" } : model;
+    case "restart_verification":
+      return model.kind === "verify" && model.inflight === null ? { ...model, challengeToken: null, error: null } : model;
     case "recheck":
       return (model.kind === "enroll" || model.kind === "verify") && model.inflight === null ? { ...model, inflight: "inspect" } : model;
     default: {

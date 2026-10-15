@@ -60,16 +60,16 @@ test("checkNewPassword enforces length, then UTF-8 bytes, then a match", () => {
   assert.deepEqual(checkNewPassword("correct horse", "correct horse"), { ok: true });
 });
 
-test("captureAuthActionToken strips the hash in the same turn and returns it after the hash is gone", () => {
+test("captureAuthActionToken retains the fragment until discarded", () => {
   window.history.replaceState({}, "", "/auth/reset-password#token=reset-token");
   assert.equal(captureAuthActionToken("/auth/reset-password"), "reset-token");
-  assert.equal(window.location.hash, "");
+  assert.equal(window.location.hash, "#token=reset-token");
   assert.equal(window.location.pathname, "/auth/reset-password");
   assert.equal(captureAuthActionToken("/auth/reset-password"), "reset-token");
   assert.equal(captureAuthActionToken("/auth/verify-email"), null);
   window.history.replaceState({}, "", "/auth/verify-email#token=verify-token");
   assert.equal(captureAuthActionToken("/auth/verify-email"), "verify-token");
-  assert.equal(captureAuthActionToken("/auth/reset-password"), "reset-token");
+  assert.equal(captureAuthActionToken("/auth/reset-password"), null);
   discardRecoveryToken("/auth/reset-password");
   assert.equal(captureAuthActionToken("/auth/reset-password"), null);
   discardRecoveryToken("/auth/verify-email");

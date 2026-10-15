@@ -1309,7 +1309,20 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
             return mapped;
           },
           async verify(input) {
-            await verifyBrowserMfa({ challengeToken: input.challengeToken, codeOrRecoveryCode: input.code });
+            const result = await registryClient.verifyMfa({ challengeToken: input.challengeToken, codeOrRecoveryCode: input.code });
+            if (!session) return;
+            const nextSession = { ...session, expiresAt: result.expiresAt };
+            setSession(nextSession);
+            writeStoredSession(nextSession);
+          },
+          async refreshProfile() {
+            const user = await registryClient.getMe();
+            setSession((current) => {
+              if (!current) return current;
+              const nextSession = { ...current, user };
+              writeStoredSession(nextSession);
+              return nextSession;
+            });
           },
         }}
         onSignIn={openLogin}
@@ -4297,6 +4310,9 @@ function AuthTokenPage({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [email, setEmail] = useState("");
+  const [resendPending, setResendPending] = useState(false);
+  const [resendError, setResendError] = useState<string | null>(null);
+  const resendBusy = useRef(false);
   const [resendNote, setResendNote] = useState<string | null>(null);
   const busy = useRef(false);
   const passwordCheck = checkNewPassword(password, confirmPassword);
@@ -4319,12 +4335,14 @@ function AuthTokenPage({
       else if (kind === "verify-email") {
         await client.confirmEmailVerification({ token });
       } else await client.confirmEmailChange({ token });
+      discardRecoveryToken(pathname);
       dispatch({ type: "succeed" });
       const done = completionView(kind, reduceCompletion(reduceCompletion(phase, { type: "submit" }), { type: "succeed" }));
       if (done.kind === "done" && done.clearLocalSession) onClearLocalSession();
     } catch (error) {
       const code = apiErrorCode(error);
       if (code === "INVALID_RESET_TOKEN" || code === "INVALID_VERIFICATION_TOKEN") {
+        discardRecoveryToken(pathname);
         dispatch({ type: "invalid" });
         return;
       }
@@ -4335,10 +4353,21 @@ function AuthTokenPage({
 
   async function resend(event: { preventDefault(): void }) {
     event.preventDefault();
-    if (view.kind !== "blocked" || view.resend.kind === "change_email_settings") return;
-    if (view.resend.kind === "reset_email") await onRequestPasswordReset({ email });
-    else await client.requestEmailVerification({ email });
-    setResendNote(view.resend.help);
+    if (view.kind !== "blocked" || view.resend.kind === "change_email_settings" || resendBusy.current) return;
+    resendBusy.current = true;
+    setResendPending(true);
+    setResendError(null);
+    setResendNote(null);
+    try {
+      if (view.resend.kind === "reset_email") await onRequestPasswordReset({ email });
+      else await client.requestEmailVerification({ email });
+      setResendNote(view.resend.help);
+    } catch (error) {
+      setResendError(safeAuthErrorMessage(error));
+    } finally {
+      resendBusy.current = false;
+      setResendPending(false);
+    }
   }
 
   return (
@@ -4391,9 +4420,10 @@ function AuthTokenPage({
                   <span>Email</span>
                   <Input className="auth-input" aria-label="Email" autoComplete="email" onChange={(event) => setEmail(event.target.value)} type="email" value={email} />
                 </label>
-                <Button className="shadcn-action-button" size="sm" type="submit">{view.resend.submitLabel}</Button>
+                <Button className="shadcn-action-button" disabled={resendPending} size="sm" type="submit">{resendPending ? "Sending…" : view.resend.submitLabel}</Button>
               </form>
             )}
+            {resendError && <p role="alert">{resendError}</p>}
             {resendNote && <p role="status">{resendNote}</p>}
             <Button asChild className="save-button shadcn-action-button" size="sm">
               <a href="/login" onClick={(event) => handleCallbackLink(event, leave)}>{view.next.label}</a>

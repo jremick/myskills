@@ -121,6 +121,57 @@ test("device inspect parsing rejects a body that only has mfaRequired", async ()
   });
 });
 
+test("failed MFA can restart with the device request retained and OTP cleared", async () => {
+  let logins = 0;
+  const codes: string[] = [];
+  const view = render(<DeviceAuthorizePage client={client([consent("verify"), consent("open")])} signedIn onSignIn={() => {}} stepUp={{
+    async login() { return { kind: "challenge", challengeToken: `challenge-${++logins}` }; },
+    async verify(input) {
+      codes.push(`${input.challengeToken}:${input.code}`);
+      if (codes.length === 1) throw new Error("Challenge expired");
+    },
+  }} />);
+  fireEvent.input(view.getByLabelText("Device code"), { target: { value: "ABCDE-FGHJK" } });
+  fireEvent.click(view.getByRole("button", { name: "Review permissions" }));
+  fireEvent.input(await view.findByLabelText("Password"), { target: { value: "correct horse" } });
+  fireEvent.click(view.getByRole("button", { name: "Continue" }));
+  fireEvent.input(await view.findByLabelText("Authenticator or recovery code"), { target: { value: "111111" } });
+  fireEvent.click(view.getByRole("button", { name: "Verify" }));
+  await view.findByText("Challenge expired");
+  fireEvent.click(view.getByRole("button", { name: "Start verification again" }));
+  assert.ok(view.getByText("ABCDE-FGHJK"));
+  fireEvent.input(view.getByLabelText("Password"), { target: { value: "correct horse" } });
+  fireEvent.click(view.getByRole("button", { name: "Continue" }));
+  const otp = await view.findByLabelText("Authenticator or recovery code");
+  assert.equal(otp.getAttribute("value"), "");
+  fireEvent.input(otp, { target: { value: "222222" } });
+  fireEvent.click(view.getByRole("button", { name: "Verify" }));
+  await view.findByRole("button", { name: "Approve CLI access" });
+  assert.deepEqual(codes, ["challenge-1:111111", "challenge-2:222222"]);
+});
+
+test("profile failure after successful device MFA retries loading without reusing the challenge", async () => {
+  let verifications = 0;
+  let profiles = 0;
+  const view = render(<DeviceAuthorizePage client={client([consent("verify"), consent("open")])} signedIn onSignIn={() => {}} stepUp={{
+    async login() { return { kind: "challenge", challengeToken: "single-use" }; },
+    async verify() { verifications += 1; },
+    async refreshProfile() { if (++profiles === 1) throw new Error("Profile unavailable"); },
+  }} />);
+  fireEvent.input(view.getByLabelText("Device code"), { target: { value: "ABCDE-FGHJK" } });
+  fireEvent.click(view.getByRole("button", { name: "Review permissions" }));
+  fireEvent.input(await view.findByLabelText("Password"), { target: { value: "correct horse" } });
+  fireEvent.click(view.getByRole("button", { name: "Continue" }));
+  fireEvent.input(await view.findByLabelText("Authenticator or recovery code"), { target: { value: "123456" } });
+  fireEvent.click(view.getByRole("button", { name: "Verify" }));
+  await view.findByText("Profile unavailable");
+  assert.equal(view.queryByLabelText("Authenticator or recovery code"), null);
+  fireEvent.click(view.getByRole("button", { name: "Check again" }));
+  await view.findByRole("button", { name: "Approve CLI access" });
+  assert.equal(verifications, 1);
+  assert.equal(profiles, 2);
+});
+
 function consent(approval: DeviceConsent["approval"]): DeviceConsent {
   return { scopes: ["skills:submit"], expiresAt: "2027-01-01T00:00:00.000Z", accountEmail: "ada@example.com", approval };
 }

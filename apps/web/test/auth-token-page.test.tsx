@@ -35,13 +35,14 @@ test("an invalid verification token replaces the confirm button and does not con
   assert.equal(calls.verifications.length, 0);
   cleanup();
   const view = render(<RegistryApp client={calls.client} />);
-  assert.equal(window.location.hash, "");
+  assert.equal(window.location.hash, "#token=expired-token");
   assert.equal(calls.verifications.length, 0);
   assert.ok(first);
   fireEvent.click(view.getByRole("button", { name: "Confirm email" }));
   await view.findByText("This link is invalid or expired.");
   assert.equal(view.queryByRole("button", { name: "Confirm email" }), null);
   assert.deepEqual(calls.verifications, ["expired-token"]);
+  assert.equal(window.location.hash, "");
 });
 
 test("one verify click confirms once and success leaves the local session", async () => {
@@ -55,6 +56,7 @@ test("one verify click confirms once and success leaves the local session", asyn
   await view.findByText("Email verified. You can sign in after your account is approved.");
   assert.equal(view.queryByRole("button", { name: "Confirm email" }), null);
   assert.deepEqual(calls.verifications, ["verify-token"]);
+  assert.equal(window.location.hash, "");
   assert.equal(window.localStorage.getItem(SESSION_KEY), storedSession);
 });
 
@@ -101,6 +103,59 @@ test("reset and email-change success clear the local session and hide the form",
   await waitFor(() => assert.equal(window.localStorage.getItem(SESSION_KEY), null));
   assert.deepEqual(change.emailChanges, ["change-token"]);
 });
+
+for (const kind of ["reset-password", "verify-email", "change-email"] as const) {
+  test(`${kind} retains its token across a reload before completion`, async () => {
+    const path = `/auth/${kind}`;
+    window.history.replaceState({}, "", `${path}#token=reload-token`);
+    const calls = recoveryCalls();
+    render(<RegistryApp client={calls.client} />);
+    cleanup();
+    assert.equal(window.location.hash, "#token=reload-token");
+    const view = render(<RegistryApp client={calls.client} />);
+    if (kind === "reset-password") {
+      fireEvent.input(view.getByLabelText("New password"), { target: { value: "correct horse" } });
+      fireEvent.input(view.getByLabelText("Confirm password"), { target: { value: "correct horse" } });
+    }
+    fireEvent.click(view.getByRole("button", { name: kind === "reset-password" ? "Save password" : kind === "verify-email" ? "Confirm email" : "Confirm email change" }));
+    await waitFor(() => assert.equal(window.location.hash, ""));
+    assert.equal(calls.passwordResets[0]?.token ?? calls.verifications[0] ?? calls.emailChanges[0], "reload-token");
+    cleanup();
+    const reloaded = render(<RegistryApp client={calls.client} />);
+    assert.ok(reloaded.getByText("This link is missing its token."));
+  });
+}
+
+for (const kind of ["reset-password", "verify-email"] as const) {
+  test(`${kind} resend shows pending, safe failure, and successful retry`, async () => {
+    window.history.replaceState({}, "", `/auth/${kind}`);
+    const calls = recoveryCalls();
+    let rejectRequest: (error: Error) => void = () => assert.fail("request not started");
+    let requests = 0;
+    const request = async () => {
+      requests += 1;
+      if (requests === 1) await new Promise<void>((_resolve, reject) => { rejectRequest = reject; });
+      return { status: "pending" as const };
+    };
+    calls.client.requestPasswordReset = request;
+    calls.client.requestEmailVerification = request;
+    const view = render(<RegistryApp client={calls.client} />);
+    fireEvent.input(view.getByLabelText("Email"), { target: { value: "reader@example.com" } });
+    const button = view.getByRole("button", { name: /Send/ });
+    fireEvent.click(button);
+    assert.equal(button.hasAttribute("disabled"), true);
+    fireEvent.click(button);
+    assert.equal(requests, 1);
+    rejectRequest(new Error("private server failure"));
+    await waitFor(() => assert.equal(button.hasAttribute("disabled"), false));
+    assert.equal(view.queryByRole("status"), null);
+    assert.equal(view.container.textContent?.includes("private server failure"), false);
+    assert.ok(view.getAllByRole("alert").length >= 2);
+    fireEvent.click(button);
+    await view.findByRole("status");
+    assert.equal(requests, 2);
+  });
+}
 
 function invalid(code: string): Error {
   return Object.assign(new Error("invalid"), { status: 401, code });
