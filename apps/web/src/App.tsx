@@ -3,7 +3,17 @@ import { SkillPreview } from "@/components/registry/SkillPreview";
 import { RecoveryGuidancePanel } from "./components/operations/RecoveryGuidancePanel.js";
 import { APPLICATION_SCOPES } from "@myskills-app/core";
 import { DeviceAuthorizePage } from "./components/DeviceAuthorizePage.js";
-import { apiTokenScopeLabel, hasDeviceDraft, stepUpFromLogin } from "./sign-in-flow.js";
+import {
+  apiTokenScopeLabel,
+  captureAuthActionToken,
+  checkNewPassword,
+  completionView,
+  discardRecoveryToken,
+  hasDeviceDraft,
+  initialCompletion,
+  reduceCompletion,
+  stepUpFromLogin,
+} from "./sign-in-flow.js";
 import { ConfirmationDialog, type ConfirmationRequest } from "@/components/ui/confirmation-dialog";
 import { MarketingLanding } from "./components/marketing/MarketingLanding.js";
 import { LandingSettings } from "./components/marketing/LandingSettings.js";
@@ -19,6 +29,7 @@ import {
   useEffect,
   useId,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -1162,11 +1173,15 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     }
   }
 
+  async function requestPasswordReset(input: { email: string }) {
+    await registryClient.requestPasswordReset(input);
+  }
+
   async function handlePasswordResetRequest(input: { email: string }) {
     setAuthState("loading");
     setAuthMessage(null);
     try {
-      await registryClient.requestPasswordReset(input);
+      await requestPasswordReset(input);
       setAuthMessage("If that account exists, a password reset email has been sent.");
     } catch (error) {
       setAuthMessage(safeAuthErrorMessage(error));
@@ -1246,6 +1261,8 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
         kind="reset-password"
         onHome={openLanding}
         onLogin={openLogin}
+        onRequestPasswordReset={requestPasswordReset}
+        onClearLocalSession={() => { setSession(null); clearStoredSession(); }}
       />
     );
   }
@@ -1267,6 +1284,8 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
         kind={activeView}
         onHome={openLanding}
         onLogin={openLogin}
+        onRequestPasswordReset={requestPasswordReset}
+        onClearLocalSession={() => { setSession(null); clearStoredSession(); }}
       />
     );
   }
@@ -4258,95 +4277,65 @@ function AuthTokenPage({
   kind,
   onHome,
   onLogin,
+  onRequestPasswordReset,
+  onClearLocalSession,
 }: {
   client: RegistryClient;
   kind: "reset-password" | "verify-email" | "change-email";
   onHome: () => void;
   onLogin: () => void;
+  onRequestPasswordReset: (input: { email: string }) => Promise<void>;
+  onClearLocalSession: () => void;
 }) {
+  const pathname = window.location.pathname;
+  const [phase, dispatch] = useReducer(reduceCompletion, pathname, (path) => initialCompletion(captureAuthActionToken(path)));
+  const view = completionView(kind, phase);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [state, setState] = useState<LoadState>(kind === "reset-password" ? "idle" : "loading");
-  const [message, setMessage] = useState<string | null>(null);
-  const token = useMemo(() => authActionTokenFromLocation(), []);
+  const [email, setEmail] = useState("");
+  const [resendNote, setResendNote] = useState<string | null>(null);
+  const busy = useRef(false);
+  const passwordCheck = checkNewPassword(password, confirmPassword);
+  const passwordMessage = (password.length > 0 || confirmPassword.length > 0) && !passwordCheck.ok ? passwordCheck.message : null;
 
-  useEffect(() => {
-    if (kind === "reset-password") {
-      return;
-    }
-    let active = true;
-    async function confirmToken() {
-      setState("loading");
-      setMessage(null);
-      if (!token) {
-        setState("error");
-        setMessage("This verification link is missing its token.");
+  function leave() {
+    if (phase.kind === "done" || phase.kind === "invalid") discardRecoveryToken(pathname);
+    onLogin();
+  }
+
+  async function submit(event: { preventDefault(): void }) {
+    event.preventDefault();
+    if (phase.kind !== "form" || view.kind !== "form" || busy.current) return;
+    if (view.form === "password" && !checkNewPassword(password, confirmPassword).ok) return;
+    busy.current = true;
+    const token = view.token;
+    dispatch({ type: "submit" });
+    try {
+      if (kind === "reset-password") await client.confirmPasswordReset({ token, password });
+      else if (kind === "verify-email") {
+        await client.confirmEmailVerification({ token });
+      } else await client.confirmEmailChange({ token });
+      dispatch({ type: "succeed" });
+      const done = completionView(kind, reduceCompletion(reduceCompletion(phase, { type: "submit" }), { type: "succeed" }));
+      if (done.kind === "done" && done.clearLocalSession) onClearLocalSession();
+    } catch (error) {
+      const code = apiErrorCode(error);
+      if (code === "INVALID_RESET_TOKEN" || code === "INVALID_VERIFICATION_TOKEN") {
+        dispatch({ type: "invalid" });
         return;
       }
-      try {
-        if (kind === "verify-email") {
-          await client.confirmEmailVerification({ token });
-          if (active) {
-            setMessage("Email verified. You can log in after your account is approved.");
-          }
-        } else {
-          await client.confirmEmailChange({ token });
-          if (active) {
-            setMessage("Email changed. Sign in again with the new address.");
-          }
-        }
-        if (active) {
-          setState("ready");
-        }
-      } catch (error) {
-        if (active) {
-          setState("error");
-          setMessage(safeAccountErrorMessage(error));
-        }
-      }
-    }
-    void confirmToken();
-    return () => {
-      active = false;
-    };
-  }, [client, kind, token]);
-
-  async function resetPassword() {
-    setMessage(null);
-    if (!token) {
-      setState("error");
-      setMessage("This reset link is missing its token.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setState("error");
-      setMessage("Passwords do not match.");
-      return;
-    }
-    const passwordError = newPasswordByteError(password);
-    if (passwordError) {
-      setState("error");
-      setMessage(passwordError);
-      return;
-    }
-    setState("loading");
-    try {
-      await client.confirmPasswordReset({ token, password });
-      setPassword("");
-      setConfirmPassword("");
-      setState("ready");
-      setMessage("Password reset. You can log in with the new password.");
-    } catch (error) {
-      setState("error");
-      setMessage(safeAccountErrorMessage(error));
+      busy.current = false;
+      dispatch({ type: "reject", message: safeAccountErrorMessage(error) });
     }
   }
 
-  const heading = kind === "reset-password"
-    ? "Reset password"
-    : kind === "verify-email"
-      ? "Verify email"
-      : "Confirm email change";
+  async function resend(event: { preventDefault(): void }) {
+    event.preventDefault();
+    if (view.kind !== "blocked" || view.resend.kind === "change_email_settings") return;
+    if (view.resend.kind === "reset_email") await onRequestPasswordReset({ email });
+    else await client.requestEmailVerification({ email });
+    setResendNote(view.resend.help);
+  }
 
   return (
     <>
@@ -4357,59 +4346,63 @@ function AuthTokenPage({
           <BrandIdentity horizontal />
         </a>
         <Button asChild className="login-back shadcn-action-button" size="sm" variant="outline">
-          <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>Login</a>
+          <a href="/login" onClick={(event) => handleCallbackLink(event, leave)}>Sign in</a>
         </Button>
       </nav>
       <section className="login-panel" aria-labelledby="auth-token-heading">
         <p className="landing-status">Public beta. Account action required.</p>
-        <h1 id="auth-token-heading">{heading}</h1>
-        {kind === "reset-password" ? (
-          <form className="auth-widget auth-form" onSubmit={(event) => {
-            event.preventDefault();
-            void resetPassword();
-          }}>
+        <h1 id="auth-token-heading">{view.heading}</h1>
+        {view.kind === "form" && view.form === "password" && (
+          <form className="auth-widget auth-form" onSubmit={(event) => void submit(event)}>
+            <p>{view.passwordRule}</p>
+            {passwordMessage && <p role="alert">{passwordMessage}</p>}
+            {view.status && <p role="alert">{view.status}</p>}
             <label className="auth-field">
               <span>New password</span>
-              <Input
-                className="auth-input"
-                aria-label="New password"
-                autoComplete="new-password"
-                disabled={state === "loading"}
-                onChange={(event) => setPassword(event.target.value)}
-                type="password"
-                value={password}
-              />
+              <Input className="auth-input" aria-label="New password" autoComplete="new-password" disabled={view.busy} onChange={(event) => setPassword(event.target.value)} type="password" value={password} />
             </label>
             <label className="auth-field">
               <span>Confirm password</span>
-              <Input
-                className="auth-input"
-                aria-label="Confirm password"
-                autoComplete="new-password"
-                disabled={state === "loading"}
-                onChange={(event) => setConfirmPassword(event.target.value)}
-                type="password"
-                value={confirmPassword}
-              />
+              <Input className="auth-input" aria-label="Confirm password" autoComplete="new-password" disabled={view.busy} onChange={(event) => setConfirmPassword(event.target.value)} type="password" value={confirmPassword} />
             </label>
-            <Button className="shadcn-action-button" disabled={state === "loading" || !password || !confirmPassword} size="sm" type="submit">
+            <Button className="shadcn-action-button" disabled={view.busy || !passwordCheck.ok} size="sm" type="submit">
               <KeyRound size={16} aria-hidden="true" />
-              Save password
+              {view.submitLabel}
             </Button>
           </form>
-        ) : (
-          <div className={state === "error" ? "safe-message compact-message" : "success-message compact-message"} role="status" aria-live="polite">
-            {state === "loading" ? "Confirming link…" : message}
-          </div>
         )}
-        {kind === "reset-password" && <AuthMessage message={message} />}
-        {state === "ready" && (
-          <Button asChild className="save-button shadcn-action-button" size="sm">
-            <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>
-              <LogIn size={16} aria-hidden="true" />
-              Login
-            </a>
-          </Button>
+        {view.kind === "form" && view.form === "confirm" && (
+          <form className="auth-widget auth-form" onSubmit={(event) => void submit(event)}>
+            {view.status && <p role="alert">{view.status}</p>}
+            <Button className="shadcn-action-button" disabled={view.busy} size="sm" type="submit">{view.submitLabel}</Button>
+          </form>
+        )}
+        {view.kind === "blocked" && (
+          <>
+            <p role="alert">{view.status}</p>
+            {view.resend.kind === "change_email_settings" ? <p>{view.resend.help}</p> : (
+              <form className="auth-widget auth-form" onSubmit={(event) => void resend(event)}>
+                <p>{view.resend.help}</p>
+                <label className="auth-field">
+                  <span>Email</span>
+                  <Input className="auth-input" aria-label="Email" autoComplete="email" onChange={(event) => setEmail(event.target.value)} type="email" value={email} />
+                </label>
+                <Button className="shadcn-action-button" size="sm" type="submit">{view.resend.submitLabel}</Button>
+              </form>
+            )}
+            {resendNote && <p role="status">{resendNote}</p>}
+            <Button asChild className="save-button shadcn-action-button" size="sm">
+              <a href="/login" onClick={(event) => handleCallbackLink(event, leave)}>{view.next.label}</a>
+            </Button>
+          </>
+        )}
+        {view.kind === "done" && (
+          <>
+            <p role="status">{view.status}</p>
+            <Button asChild className="save-button shadcn-action-button" size="sm">
+              <a href="/login" onClick={(event) => handleCallbackLink(event, leave)}>{view.next.label}</a>
+            </Button>
+          </>
         )}
       </section>
     </main>

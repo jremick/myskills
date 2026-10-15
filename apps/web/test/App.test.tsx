@@ -2741,6 +2741,9 @@ function mockClient(input: {
     async confirmPasswordReset() {
       return { status: "reset" };
     },
+    async requestEmailVerification() {
+      return { status: "pending" };
+    },
     async confirmEmailVerification() {
       return { status: "verified" };
     },
