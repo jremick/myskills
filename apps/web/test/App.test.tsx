@@ -2452,6 +2452,54 @@ test("review confirmations require a meaningful reason and recover from API erro
   assert.equal(document.activeElement, view.getByRole("button", { name: "Reject" }));
 });
 
+test("publish confirmation names the skill, version, and audience", async () => {
+  const maintainer = authUser({ email: "maintainer@example.com", roles: ["maintainer"] });
+  setupAuthenticatedDom("http://localhost/review", maintainer);
+  const base = defaultReviewSubmissions()[0]!;
+  const client = mockClient({
+    user: maintainer,
+    reviewSubmissions: [{ ...base, allowedActions: ["publish", "reject"], approvedArtifactSha256: null }],
+  });
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText("Review dashboard");
+  fireEvent.click(await view.findByRole("button", { name: "Publish" }));
+  const dialog = await view.findByRole("dialog", { name: "Publish this release?" });
+  assert.equal(detailValue(dialog, "Skill name"), "Release Notes Helper");
+  assert.equal(detailValue(dialog, "Version"), "0.1.0");
+  assert.equal(detailValue(dialog, "Audience"), "Public");
+  assert.equal(detailLabel(dialog, "Approved SHA-256"), null);
+  assert.equal(detailLabel(dialog, "Release"), null);
+  const publish = within(dialog).getByRole("button", { name: "Publish release" }) as HTMLButtonElement;
+  const reason = within(dialog).getByLabelText("Reason (required)");
+  fireEvent.input(reason, { target: { value: "no" } });
+  assert.equal(publish.disabled, true);
+  fireEvent.input(reason, { target: { value: "release ready" } });
+  assert.equal(publish.disabled, false);
+  fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  fireEvent.click(view.getByRole("button", { name: "Reject" }));
+  const reject = await view.findByRole("dialog", { name: "Reject this submission?" });
+  assert.equal(detailValue(reject, "Release"), "release-notes-helper@0.1.0");
+  assert.equal(detailLabel(reject, "Skill name"), null);
+});
+
+test("publish confirmation shows the approved hash after approval stores one", async () => {
+  const maintainer = authUser({ email: "maintainer@example.com", roles: ["maintainer"] });
+  setupAuthenticatedDom("http://localhost/review", maintainer);
+  const hash = "ab".repeat(32);
+  const base = defaultReviewSubmissions()[0]!;
+  const client = mockClient({
+    user: maintainer,
+    reviewSubmissions: [{ ...base, allowedActions: ["publish"], approvedArtifactSha256: hash, reviewStatus: "approved" }],
+  });
+  const view = render(<RegistryApp client={client} />);
+  await view.findByText("Review dashboard");
+  fireEvent.click(await view.findByRole("button", { name: "Publish" }));
+  const dialog = await view.findByRole("dialog", { name: "Publish this release?" });
+  assert.equal(detailValue(dialog, "Approved SHA-256"), hash);
+  assert.equal(detailValue(dialog, "Skill name"), "Release Notes Helper");
+  assert.equal(detailLabel(dialog, "Release"), null);
+});
+
 test("author sessions can submit a package archive without rendering package content", async () => {
   setupDom();
   const client = mockClient({ user: authUser({ email: "author@example.com", roles: ["author"] }), userSubmissions: [] });
@@ -3949,6 +3997,17 @@ function selectRelease(view: ReturnType<typeof render>, version: string) {
 
 async function findCommand(pattern: RegExp) {
   await waitFor(() => assert.match(document.querySelector(".command-panel code")?.textContent ?? "", pattern));
+}
+
+function detailValue(scope: HTMLElement, label: string): string {
+  const term = within(scope).getByText(label, { selector: "dt" });
+  const value = term.nextElementSibling;
+  assert.equal(value?.tagName, "DD");
+  return value?.textContent ?? "";
+}
+
+function detailLabel(scope: HTMLElement, label: string): HTMLElement | null {
+  return within(scope).queryByText(label, { selector: "dt" });
 }
 
 function historyClient(fixture: ReturnType<typeof releaseHistoryFixture>, options: Parameters<typeof mockClient>[0] = {}) {

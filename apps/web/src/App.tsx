@@ -2720,8 +2720,17 @@ function ReviewDashboard({ client, onOpenSkill, session }: { client: RegistryCli
     };
     const label = labels[action];
     const release = { label: "Release", value: `${submission.slug}@${submission.version}` };
-    const details = action === "approve" && artifactSha256 ? [release, { label: "Artifact SHA-256", value: artifactSha256 }]
-      : action === "publish" && submission.approvedArtifactSha256 ? [release, { label: "Approved SHA-256", value: submission.approvedArtifactSha256 }]
+    const details = action === "publish"
+      ? [
+          { label: "Skill name", value: submission.title },
+          { label: "Version", value: submission.version },
+          { label: "Audience", value: visibilityLabel(submission.visibility) },
+          ...(submission.approvedArtifactSha256
+            ? [{ label: "Approved SHA-256", value: submission.approvedArtifactSha256 }]
+            : []),
+        ]
+      : action === "approve" && artifactSha256
+        ? [release, { label: "Artifact SHA-256", value: artifactSha256 }]
         : [release];
     setConfirmation({
       key: `review-${action}`,
