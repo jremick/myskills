@@ -165,6 +165,10 @@
   line-height: 18px;
   overflow-wrap: anywhere;
 }
+.registry-workspace.people-workspace .people-confirm-strip dl { display: grid; gap: 6px; margin: 0; color: var(--ink); }
+.registry-workspace.people-workspace .people-confirm-strip dl div { display: grid; gap: 2px; }
+.registry-workspace.people-workspace .people-confirm-strip dt { font-weight: 600; }
+.registry-workspace.people-workspace .people-confirm-strip dd { margin: 0; }
 .registry-workspace.people-workspace [data-slot="button"][data-variant="outline"] { border-color: var(--line); color: var(--ink-soft); background: var(--surface); box-shadow: none; }
 .registry-workspace.people-workspace [data-slot="button"][data-variant="outline"]:hover { border-color: var(--teal); color: var(--teal-dark); background: var(--teal-soft); }
 .registry-workspace.people-workspace .people-danger[data-slot="button"][data-variant="outline"] { border-color: rgba(180, 35, 24, 0.35); color: var(--danger); background: var(--surface); }

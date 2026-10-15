@@ -38,6 +38,44 @@ interface OrganizationSession {
 type LoadState = "loading" | "ready" | "error";
 type FocusTarget = { kind: "title" } | { kind: "row"; id: string } | { kind: "new" } | { kind: "create-name" };
 
+type PolicyFlagField =
+  | { kind: "flag"; section: "sharing"; key: keyof OrganizationPolicyV1["sharing"]; label: string }
+  | { kind: "flag"; section: "teams"; key: keyof OrganizationPolicyV1["teams"]; label: string };
+type PolicyLimitField = { kind: "limit"; key: keyof OrganizationPolicyV1["limits"]; label: string };
+type PolicyField = PolicyFlagField | PolicyLimitField;
+
+const POLICY_FIELDS: readonly PolicyField[] = [
+  { kind: "flag", section: "sharing", key: "organizationSkillSharingEnabled", label: "Enable organization skill sharing" },
+  { kind: "flag", section: "sharing", key: "organizationArchitectureSharingEnabled", label: "Enable organization architecture sharing" },
+  { kind: "flag", section: "sharing", key: "membersCanShareOwnedSkillsToOrganization", label: "Let members share owned skills" },
+  { kind: "flag", section: "sharing", key: "teamOwnersCanShareArchitecturesToParentOrganization", label: "Let team owners share architectures" },
+  { kind: "flag", section: "teams", key: "membersCanCreateTeams", label: "Let members create child teams" },
+  { kind: "flag", section: "teams", key: "requireOrganizationMembershipForTeamMembers", label: "Require organization membership for team members" },
+  { kind: "flag", section: "teams", key: "allowStandaloneTeamAdoption", label: "Allow standalone team adoption" },
+  { kind: "limit", key: "teamsPerOrganization", label: "Teams per organization" },
+  { kind: "limit", key: "membersPerOrganization", label: "Members per organization" },
+  { kind: "limit", key: "organizationGrantsPerSkill", label: "Skill grants" },
+  { kind: "limit", key: "organizationGrantsPerArchitecture", label: "Architecture grants" },
+];
+
+function changedPolicySettings(before: OrganizationPolicyV1, after: OrganizationPolicyV1): Array<{ label: string; text: string }> {
+  const changes: Array<{ label: string; text: string }> = [];
+  for (const field of POLICY_FIELDS) {
+    if (field.kind === "limit") {
+      const earlier = before.limits[field.key];
+      const later = after.limits[field.key];
+      if (earlier === later) continue;
+      changes.push({ label: field.label, text: `${earlier} before, ${later} after.` });
+      continue;
+    }
+    const earlier = field.section === "sharing" ? before.sharing[field.key] : before.teams[field.key];
+    const later = field.section === "sharing" ? after.sharing[field.key] : after.teams[field.key];
+    if (earlier === later) continue;
+    changes.push({ label: field.label, text: `${earlier ? "On" : "Off"} before, ${later ? "On" : "Off"} after.` });
+  }
+  return changes;
+}
+
 const ORGANIZATION_POLICY_DEFAULTS: OrganizationPolicyV1 = {
   schemaVersion: 1,
   sharing: {
@@ -810,6 +848,9 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
   }
 
   const current = policies.find((revision) => revision.id === detail.currentPolicyRevisionId);
+  const currentPolicy = detail.currentPolicy?.policy ?? ORGANIZATION_POLICY_DEFAULTS;
+  const appendChanges = pendingAppend ? changedPolicySettings(currentPolicy, draft) : null;
+  const activationChanges = pendingActivation ? changedPolicySettings(currentPolicy, pendingActivation.policy) : null;
 
   return (
     <section aria-labelledby={`${baseId}-heading`} className="registry-section">
@@ -836,9 +877,10 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
                       ? pendingActivation?.id === revision.id ? null : <Button disabled={state === "saving" || Boolean(pendingActivation)} size="sm" type="button" variant="outline" onClick={() => requestActivatePolicy(revision)}><Check size={15} aria-hidden="true" />Activate</Button>
                       : <span className="registry-chip">Inactive</span>}
                 </span>
-                {canManage && pendingActivation?.id === revision.id && (
+                {canManage && pendingActivation?.id === revision.id && activationChanges && (
                   <div className="control-plane-inline-message people-confirm-strip" role="alert">
                     <span>Activate immutable policy revision {revision.revisionNumber}?</span>
+                    <PolicyChangeList changes={activationChanges} />
                     <div className="people-form-actions">
                       <Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelActivatePolicy}>Cancel</Button>
                       <Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void commitActivatePolicy(revision)}>{state === "saving" ? "Activating…" : "Confirm activate"}</Button>
@@ -854,27 +896,36 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
       {canManage && editing && (
         <form className="organization-policy-form" id={`${baseId}-form`} onSubmit={(event) => void appendPolicy(event)}>
           <div className="organization-policy-flags">
-            <PolicyCheckbox disabled={state === "saving"} label="Enable organization skill sharing" checked={draft.sharing.organizationSkillSharingEnabled} onChange={(value) => setFlag("sharing", "organizationSkillSharingEnabled", value)} />
-            <PolicyCheckbox disabled={state === "saving"} label="Enable organization architecture sharing" checked={draft.sharing.organizationArchitectureSharingEnabled} onChange={(value) => setFlag("sharing", "organizationArchitectureSharingEnabled", value)} />
-            <PolicyCheckbox disabled={state === "saving"} label="Let members share owned skills" checked={draft.sharing.membersCanShareOwnedSkillsToOrganization} onChange={(value) => setFlag("sharing", "membersCanShareOwnedSkillsToOrganization", value)} />
-            <PolicyCheckbox disabled={state === "saving"} label="Let team owners share architectures" checked={draft.sharing.teamOwnersCanShareArchitecturesToParentOrganization} onChange={(value) => setFlag("sharing", "teamOwnersCanShareArchitecturesToParentOrganization", value)} />
-            <PolicyCheckbox disabled={state === "saving"} label="Let members create child teams" checked={draft.teams.membersCanCreateTeams} onChange={(value) => setFlag("teams", "membersCanCreateTeams", value)} />
-            <PolicyCheckbox disabled={state === "saving"} label="Require organization membership for team members" checked={draft.teams.requireOrganizationMembershipForTeamMembers} onChange={(value) => setFlag("teams", "requireOrganizationMembershipForTeamMembers", value)} />
-            <PolicyCheckbox disabled={state === "saving"} label="Allow standalone team adoption" checked={draft.teams.allowStandaloneTeamAdoption} onChange={(value) => setFlag("teams", "allowStandaloneTeamAdoption", value)} />
+            {POLICY_FIELDS.filter((field) => field.kind === "flag").map((field) => (
+              <PolicyCheckbox key={field.key} disabled={state === "saving"} label={field.label} checked={field.section === "sharing" ? draft.sharing[field.key] : draft.teams[field.key]} onChange={(value) => setFlag(field.section, field.key, value)} />
+            ))}
           </div>
           <div className="organization-policy-limits">
-            <PolicyLimit disabled={state === "saving"} label="Teams per organization" value={draft.limits.teamsPerOrganization} onChange={(value) => setLimit("teamsPerOrganization", value)} />
-            <PolicyLimit disabled={state === "saving"} label="Members per organization" value={draft.limits.membersPerOrganization} onChange={(value) => setLimit("membersPerOrganization", value)} />
-            <PolicyLimit disabled={state === "saving"} label="Skill grants" value={draft.limits.organizationGrantsPerSkill} onChange={(value) => setLimit("organizationGrantsPerSkill", value)} />
-            <PolicyLimit disabled={state === "saving"} label="Architecture grants" value={draft.limits.organizationGrantsPerArchitecture} onChange={(value) => setLimit("organizationGrantsPerArchitecture", value)} />
+            {POLICY_FIELDS.filter((field) => field.kind === "limit").map((field) => (
+              <PolicyLimit key={field.key} disabled={state === "saving"} label={field.label} value={draft.limits[field.key]} onChange={(value) => setLimit(field.key, value)} />
+            ))}
           </div>
           <label><span>Revision reason</span><Textarea aria-label="Policy revision reason" disabled={state === "saving"} onChange={(event) => setReason(event.target.value)} placeholder="Why this policy change is needed" value={reason} /></label>
-          {!pendingAppend ? <Button className="shadcn-action-button people-start" disabled={state === "saving"} size="sm" type="submit"><Plus size={15} aria-hidden="true" />Review append and activate</Button> : <div className="control-plane-inline-message people-confirm-strip" role="alert"><span>Confirm this immutable revision. The API will report whether it becomes the current policy immediately.</span><div className="people-form-actions"><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelAppendPolicy}>Cancel</Button><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void commitAppendPolicy()}>{state === "saving" ? "Saving…" : "Confirm append and activate"}</Button></div></div>}
+          {!pendingAppend ? <Button className="shadcn-action-button people-start" disabled={state === "saving"} size="sm" type="submit"><Plus size={15} aria-hidden="true" />Review append and activate</Button> : appendChanges && <div className="control-plane-inline-message people-confirm-strip" role="alert"><span>Confirm this immutable revision. The API will report whether it becomes the current policy immediately.</span><PolicyChangeList changes={appendChanges} /><div className="people-form-actions"><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelAppendPolicy}>Cancel</Button><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void commitAppendPolicy()}>{state === "saving" ? "Saving…" : "Confirm append and activate"}</Button></div></div>}
         </form>
       )}
       {!canManage && <p className="registry-muted">Only the organization owner can append or activate policy revisions.</p>}
       {message && <div className="people-status" data-tone={state === "error" ? "danger" : undefined} role={state === "error" ? "alert" : "status"}><span>{message}</span>{state === "error" && <Button size="sm" type="button" variant="outline" onClick={() => pendingActivation ? void commitActivatePolicy(pendingActivation) : void commitAppendPolicy()}>Retry</Button>}</div>}
     </section>
+  );
+}
+
+function PolicyChangeList({ changes }: { changes: Array<{ label: string; text: string }> }) {
+  if (changes.length === 0) return <p>No settings differ from the current policy.</p>;
+  return (
+    <dl aria-label="Changed policy settings">
+      {changes.map((change) => (
+        <div key={change.label}>
+          <dt>{change.label}</dt>
+          <dd>{change.text}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
