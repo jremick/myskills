@@ -152,6 +152,8 @@ main.account-workspace {
 .account-workspace .account-field .field-error { color: var(--danger); }
 .account-workspace .account-hint { margin-top: -6px; color: var(--muted); font-size: 12px; line-height: 16px; }
 .account-workspace .account-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.account-workspace .account-danger-zone { display: grid; justify-items: start; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.account-workspace .account-danger-zone > p { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 18px; }
 .account-workspace .account-select {
   width: 100%;
   height: 36px;

@@ -4811,7 +4811,7 @@ function AccountSettings({
                   </div>
                 )}
                 {mfaEnabled && (
-                  <section aria-label="Remove authenticator app">
+                  <section aria-label="Remove authenticator app" className="account-danger-zone">
                     <p>Remove MFA disables every authenticator app factor for this account.</p>
                     {!mfaRemovalOpen && (
                       <Button className="account-danger" ref={removeMfaRef} size="sm" type="button" variant="outline" onClick={openMfaRemoval}>
