@@ -57,8 +57,10 @@ Do not pass a shared database to parallel browser files. Keep the outer lane cou
 allocation, source commit and cache preparation equal when measuring this option.
 
 Mocked-browser comparisons disable retries and stop on the first failure. Failed or cancelled
-web jobs retain raw reports and traces in the private run's `browser-diagnostics/<job>` directory
-before their source clone is removed. Keep these diagnostics private; they are not release artifacts.
+web jobs retain raw reports and traces in an owner-only `.private-browser-diagnostics-<run>-<job>-*`
+directory beside the evidence directory before their source clone is removed. These files stay on
+the worker and are excluded from evidence exports. The controller collects only the existing
+sanitized browser evidence. Remove retained private diagnostics with the associated run directory.
 Vite output is included in the browser job log.
 
 Keep the external worker's global job lock around the whole invocation. Internal parallelism

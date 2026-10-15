@@ -1327,15 +1327,19 @@ for (const workers of ["1", "2"]) test(`mocked browser workers ${workers} preser
   }
 });
 
-// Failure modes established before implementation: a retry hides a flaky case;
-// the next suite overwrites traces; source cleanup deletes the only failure evidence.
-test("failed mocked browser preserves its local diagnostics before clone cleanup", (t) => {
+// Failure modes established before implementation: raw authentication traces enter exported
+// evidence, source cleanup deletes private diagnostics, or retained data is readable by other users.
+test("failed mocked browser keeps raw diagnostics private outside exported evidence", (t) => {
   const fixture = makeFixture(t);
   fixture.configure({ failMockedBrowser: "22" });
   const run = runLocalCi(fixture, ["verify", "--job", "web-e2e-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
   assert.equal(run.status, 1, run.output);
   assert.equal(run.result.jobs[0].status, "failed");
-  const retained = join(run.evidence, "browser-diagnostics", "web-e2e-node22");
+  assert.equal(existsSync(join(run.evidence, "browser-diagnostics")), false);
+  const [privateName] = readdirSync(dirname(run.evidence)).filter((name) => name.startsWith(`.private-browser-diagnostics-${run.result.runId}-web-e2e-node22-`));
+  assert.ok(privateName, "private diagnostics must survive source cleanup");
+  const retained = join(dirname(run.evidence), privateName);
+  assert.equal(lstatSync(retained).mode & 0o777, 0o700);
   assert.equal(readFileSync(join(retained, "failed-case", "trace.zip"), "utf8"), "synthetic diagnostic trace");
   assert.equal(JSON.parse(readFileSync(join(retained, "mocked-report.json"), "utf8")).suites.length, 1);
   assert.equal(existsSync(fixture.runWorkspace), false);

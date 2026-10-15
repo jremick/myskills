@@ -524,11 +524,12 @@ class JobContext {
       this.fail("internal-error");
     }
     if (this.clone) {
-      // Keep private failure diagnostics before deleting the isolated source clone.
+      // Raw authentication traces stay private on the worker, outside exported evidence.
       const diagnostics = join(this.clone, "apps/web/test-results");
       if (this.id.startsWith("web-e2e-") && (this.reason || this.timedOut || this.stopped) && existsSync(diagnostics)) {
         try {
-          copyRegularFiles(diagnostics, join(this.run.evidence, "browser-diagnostics", this.id));
+          const retained = mkdtempSync(join(dirname(this.run.evidence), `.private-browser-diagnostics-${this.run.runId}-${this.id}-`));
+          copyRegularFiles(diagnostics, retained);
         } catch (error) {
           this.sink.note(`failure diagnostics could not be retained: ${error.code ?? error.message}`);
           this.fail("diagnostic-retention-failed");
