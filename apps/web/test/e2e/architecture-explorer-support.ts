@@ -137,7 +137,7 @@ export async function expectArchitectureUrl(page: Page, expected: {
   context?: Record<string, string>;
   node?: string | null;
   view?: "map" | null;
-}): Promise<void> {
+}, options: { timeout?: number } = {}): Promise<void> {
   await expect.poll(() => {
     const url = new URL(page.url());
     const { node, view, ...context } = Object.fromEntries(url.searchParams);
@@ -147,7 +147,7 @@ export async function expectArchitectureUrl(page: Page, expected: {
       ...(expected.node !== undefined ? { node: node ?? null } : {}),
       ...(expected.view !== undefined ? { view: view ?? null } : {}),
     };
-  }).toEqual({
+  }, options).toEqual({
     path: `/architectures/${expected.id}${expected.surface === "workbench" ? "/workbench" : ""}`,
     context: expected.context ?? {},
     ...(expected.node !== undefined ? { node: expected.node } : {}),
