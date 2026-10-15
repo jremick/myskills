@@ -1637,7 +1637,6 @@ test("the 500-node library opens collapsed, counts only skills, finds deep match
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/architectures/${SCALE_LIBRARY.id}`);
   await expect(page.getByRole("heading", { name: SCALE_LIBRARY.name, level: 2 })).toBeVisible();
-  // The 500-node detail resolves its default context after a slower projection; allow for CI load.
   await expectArchitectureUrl(page, { id: SCALE_LIBRARY.id, context: scaleContext, node: null }, { timeout: 20_000 });
 
   // Only the root and its routers are shown, every branch collapsed.
