@@ -184,13 +184,15 @@ test("policy append and activate list only the settings that changed", async () 
   const unchanged = policyAlert(view, "Confirm append and activate");
   const unchangedCopy = "No settings differ from the current policy.";
   assert.equal(within(unchanged).getByText(unchangedCopy).textContent, unchangedCopy);
+  assert.equal(within(unchanged).queryByRole("group", { name: "Changed policy settings" }), null);
   assert.equal((within(unchanged).getByRole("button", { name: "Confirm append and activate" }) as HTMLButtonElement).disabled, false);
   fireEvent.click(within(unchanged).getByRole("button", { name: "Cancel" }));
 
   fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
   fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
   const append = policyAlert(view, "Confirm append and activate");
-  assert.deepEqual(policyTerms(append), ["Enable organization skill sharing"]);
+  const appendChanges = within(append).getByRole("group", { name: "Changed policy settings" });
+  assert.deepEqual(policyTerms(appendChanges), ["Enable organization skill sharing"]);
   assert.equal(policyValue(append, "Enable organization skill sharing"), "On before, Off after.");
   assert.equal(within(append).queryByText("Let members create child teams"), null);
   assert.equal(within(append).queryByText("Teams per organization"), null);
@@ -198,7 +200,8 @@ test("policy append and activate list only the settings that changed", async () 
 
   fireEvent.click(view.getByRole("button", { name: "Activate" }));
   const activate = policyAlert(view, "Confirm activate");
-  assert.deepEqual(policyTerms(activate), ["Let members create child teams", "Teams per organization"]);
+  const activateChanges = within(activate).getByRole("group", { name: "Changed policy settings" });
+  assert.deepEqual(policyTerms(activateChanges), ["Let members create child teams", "Teams per organization"]);
   assert.equal(policyValue(activate, "Let members create child teams"), "Off before, On after.");
   assert.equal(policyValue(activate, "Teams per organization"), "100 before, 50 after.");
   assert.equal(within(activate).queryByText("Enable organization skill sharing"), null);

@@ -918,7 +918,7 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
 function PolicyChangeList({ changes }: { changes: Array<{ label: string; text: string }> }) {
   if (changes.length === 0) return <p>No settings differ from the current policy.</p>;
   return (
-    <dl aria-label="Changed policy settings">
+    <dl aria-label="Changed policy settings" role="group">
       {changes.map((change) => (
         <div key={change.label}>
           <dt>{change.label}</dt>
