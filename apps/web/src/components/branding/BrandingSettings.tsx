@@ -107,8 +107,11 @@ export function BrandingSettings({ client, canEdit, onSaved }: { client: Registr
       <div className="account-actions">
         <Button type="submit" disabled={!changed || !draft.text.trim() || reading} aria-disabled={busy}>{busy ? "Saving…" : "Save branding"}</Button>
         <Button type="button" variant="outline" disabled={busy || (!changed && !reading)} onClick={() => replaceDraft(saved)}>Discard</Button>
-        <Button type="button" variant="ghost" disabled={busy} onClick={() => replaceDraft({ ...DEFAULT_BRANDING })}>Restore MySkills defaults</Button>
       </div>
+      <section aria-label="Preview MySkills defaults" className="branding-defaults">
+        <p>Replaces this draft with the MySkills mark and text. Nothing is saved until you choose Save branding.</p>
+        <Button type="button" variant="ghost" disabled={busy} onClick={() => replaceDraft({ ...DEFAULT_BRANDING })}>Restore MySkills defaults</Button>
+      </section>
     </form>}
     {reading && <p role="status">Reading image…</p>}
     {message && <p className="safe-message" role={error ? "alert" : "status"}>{message}</p>}

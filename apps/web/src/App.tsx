@@ -4799,46 +4799,51 @@ function AccountSettings({
                       <RotateCw size={16} aria-hidden="true" />
                       Reset authenticator
                     </Button>
+                  </div>
+                )}
+                {mfaEnabled && (
+                  <section aria-label="Remove authenticator app">
+                    <p>Remove MFA disables every authenticator app factor for this account.</p>
                     {!mfaRemovalOpen && (
                       <Button className="account-danger" ref={removeMfaRef} size="sm" type="button" variant="outline" onClick={openMfaRemoval}>
                         <X size={16} aria-hidden="true" />
                         Remove MFA
                       </Button>
                     )}
-                  </div>
-                )}
-                {mfaEnabled && mfaRemovalOpen && (
-                  <form className="account-form account-inline-form" onKeyDown={(event) => {
-                    if (event.key !== "Escape") return;
-                    event.preventDefault();
-                    closeMfaRemoval();
-                  }} onSubmit={(event) => {
-                    event.preventDefault();
-                    const formData = new window.FormData(event.currentTarget);
-                    requestMfaRemoval(String(formData.get("mfa-removal-password") ?? ""));
-                  }}>
-                    <label className="account-field">
-                      <span>Password for MFA removal</span>
-                      <Input
-                        aria-label="Password for MFA removal"
-                        autoComplete="current-password"
-                        id={`${baseId}-mfa-removal`}
-                        name="mfa-removal-password"
-                        onChange={(event) => setMfaPassword(event.target.value)}
-                        onInput={(event) => setMfaPassword(event.currentTarget.value)}
-                        required
-                        type="password"
-                        value={mfaPassword}
-                      />
-                    </label>
-                    <div className="account-actions">
-                      <Button disabled={state === "loading"} size="sm" type="submit" variant="destructive">
-                        <X size={16} aria-hidden="true" />
-                        Remove MFA
-                      </Button>
-                      <Button size="sm" type="button" variant="outline" onClick={closeMfaRemoval}>Cancel</Button>
-                    </div>
-                  </form>
+                    {mfaRemovalOpen && (
+                      <form className="account-form account-inline-form" onKeyDown={(event) => {
+                        if (event.key !== "Escape") return;
+                        event.preventDefault();
+                        closeMfaRemoval();
+                      }} onSubmit={(event) => {
+                        event.preventDefault();
+                        const formData = new window.FormData(event.currentTarget);
+                        requestMfaRemoval(String(formData.get("mfa-removal-password") ?? ""));
+                      }}>
+                        <label className="account-field">
+                          <span>Password for MFA removal</span>
+                          <Input
+                            aria-label="Password for MFA removal"
+                            autoComplete="current-password"
+                            id={`${baseId}-mfa-removal`}
+                            name="mfa-removal-password"
+                            onChange={(event) => setMfaPassword(event.target.value)}
+                            onInput={(event) => setMfaPassword(event.currentTarget.value)}
+                            required
+                            type="password"
+                            value={mfaPassword}
+                          />
+                        </label>
+                        <div className="account-actions">
+                          <Button disabled={state === "loading"} size="sm" type="submit" variant="destructive">
+                            <X size={16} aria-hidden="true" />
+                            Remove MFA
+                          </Button>
+                          <Button size="sm" type="button" variant="outline" onClick={closeMfaRemoval}>Cancel</Button>
+                        </div>
+                      </form>
+                    )}
+                  </section>
                 )}
                 {(!mfaEnabled || mfaSetupOpen) && (
                   <MfaSetupPanel

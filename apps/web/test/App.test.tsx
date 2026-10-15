@@ -817,10 +817,162 @@ test("skill deletion clears the parent detail and its stale export actions", asy
   fireEvent.click(deleteButton);
   const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
   fireEvent.input(within(confirm).getByRole("textbox", { name: "Lifecycle reason" }), { target: { value: "Remove obsolete skill" } });
+  fireEvent.input(within(confirm).getByRole("textbox", { name: "Type the skill slug or name" }), { target: { value: "release-notes-helper" } });
   fireEvent.click(within(confirm).getByRole("button", { name: "Confirm delete" }));
   await view.findByText("Skill or release not found.");
   assert.equal(document.querySelector(".command-panel"), null);
   assert.equal(view.queryByRole("tab", { name: "Manage" }), null);
+});
+
+test("delete skill requires the saved slug or title and stays apart from archive and restore", async () => {
+  const owner = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
+  const skill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } } as PublicSkill;
+  const client = mockClient({ user: owner, skills: [skill] });
+  client.getManagedSkill = async () => managedSummary(skill, ["edit", "archive", "restore", "delete"]);
+  const actions: Array<{ slug: string; action: string; reason?: string }> = [];
+  client.performSkillAction = async (slug, action, reason) => {
+    actions.push({ slug, action, reason });
+    return managedSummary(skill, ["edit", "archive", "restore", "delete"]);
+  };
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  const deleteSkill = await view.findByRole("button", { name: "Delete skill" });
+  const restoreSkill = view.getByRole("button", { name: "Restore skill" });
+  const archiveSkill = view.getByRole("button", { name: "Archive skill" });
+  assert.notEqual(deleteSkill.parentElement, restoreSkill.parentElement);
+  assert.notEqual(deleteSkill.parentElement, archiveSkill.parentElement);
+  const danger = view.getByRole("region", { name: "Destructive skill actions" });
+  assert.equal(within(danger).getByRole("button", { name: "Delete skill" }), deleteSkill);
+  assert.equal(within(danger).queryByRole("button", { name: "Restore skill" }), null);
+  assert.equal(within(danger).queryByRole("button", { name: "Archive skill" }), null);
+
+  fireEvent.click(archiveSkill);
+  const archiveConfirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  assert.equal(within(archiveConfirm).queryByRole("textbox", { name: "Type the skill slug or name" }), null);
+  fireEvent.click(within(archiveConfirm).getByRole("button", { name: "Cancel" }));
+
+  fireEvent.click(deleteSkill);
+  const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  const archivedCopy = "This archives the skill, the same stored state as Archive skill. Restore skill stays available.";
+  assert.equal(within(confirm).getByText(archivedCopy).textContent, archivedCopy);
+  assert.equal(confirm.textContent?.includes("cannot be undone"), false);
+  assert.equal(confirm.textContent?.includes("gone forever"), false);
+  const help = "Type the saved slug or the saved name. The saved slug is release-notes-helper. The saved name is Release Notes Helper.";
+  assert.equal(within(confirm).getByText(help).textContent, help);
+  const confirmDelete = within(confirm).getByRole("button", { name: "Confirm delete" }) as HTMLButtonElement;
+  fireEvent.input(within(confirm).getByRole("textbox", { name: "Lifecycle reason" }), { target: { value: "  Remove obsolete skill  " } });
+  assert.equal(confirmDelete.disabled, true);
+  fireEvent.input(view.getByRole("textbox", { name: "Title" }), { target: { value: "updated registry title" } });
+  const match = within(confirm).getByRole("textbox", { name: "Type the skill slug or name" });
+  fireEvent.input(match, { target: { value: "updated registry title" } });
+  assert.equal(confirmDelete.disabled, true);
+  fireEvent.click(confirmDelete);
+  assert.deepEqual(actions, []);
+  fireEvent.input(match, { target: { value: "Release Notes Helper" } });
+  assert.equal(confirmDelete.disabled, false);
+  fireEvent.input(match, { target: { value: "RELEASE-NOTES-HELPER" } });
+  assert.equal(confirmDelete.disabled, true);
+  fireEvent.input(match, { target: { value: " release-notes-helper " } });
+  assert.equal(confirmDelete.disabled, false);
+  fireEvent.click(confirmDelete);
+  await waitFor(() => assert.deepEqual(actions, [{ slug: "release-notes-helper", action: "delete", reason: "Remove obsolete skill" }]));
+});
+
+test("delete skill names one saved value when the slug and title match", async () => {
+  const owner = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
+  const skill = { ...publicSkill(), title: "release-notes-helper", access: { canManageSharing: true, reasons: ["owner", "public"] } } as PublicSkill;
+  const client = mockClient({ user: owner, skills: [skill] });
+  client.getManagedSkill = async () => managedSummary(skill);
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  fireEvent.click(await view.findByRole("button", { name: "Delete skill" }));
+  const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  const help = "Type the saved slug or the saved name. Both are release-notes-helper.";
+  assert.equal(within(confirm).getByText(help).textContent, help);
+});
+
+test("release delete confirms from a reason and stays apart from restore", async () => {
+  const owner = authUser({ roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/skills/release-notes-helper?version=0.2.0", owner);
+  const fixture = releaseHistoryFixture();
+  fixture.skill = { ...fixture.skill, access: { canManageSharing: true, reasons: ["owner", "public"] } };
+  const current = { ...releaseSummary(fixture.latest), allowedActions: ["restore", "delete", "revoke"] as const };
+  const client = historyClient(fixture, { user: owner, releaseListLoader: () => [current] });
+  client.getManagedSkill = async () => managedSummary(fixture.skill, ["edit"]);
+  const view = render(<RegistryApp client={client} />);
+  fireEvent.click(await view.findByRole("tab", { name: "Manage" }));
+  const deleteRelease = await view.findByRole("button", { name: "Delete 0.2.0" });
+  const restoreRelease = view.getByRole("button", { name: "Restore 0.2.0" });
+  assert.notEqual(deleteRelease.parentElement, restoreRelease.parentElement);
+  const danger = view.getByRole("region", { name: "Destructive release actions" });
+  assert.equal(within(danger).getByRole("button", { name: "Delete 0.2.0" }), deleteRelease);
+  assert.equal(within(danger).getByRole("button", { name: "Revoke 0.2.0" }).textContent, "Revoke 0.2.0");
+  assert.equal(within(danger).queryByRole("button", { name: "Restore 0.2.0" }), null);
+  fireEvent.click(deleteRelease);
+  const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  const deletionCopy = "Deletion removes this resource from use and cannot be undone from this screen.";
+  assert.equal(within(confirm).getByText(deletionCopy).textContent, deletionCopy);
+  assert.equal(within(confirm).queryByRole("textbox", { name: "Type the skill slug or name" }), null);
+  const confirmDelete = within(confirm).getByRole("button", { name: "Confirm delete" }) as HTMLButtonElement;
+  assert.equal(confirmDelete.disabled, true);
+  fireEvent.input(within(confirm).getByRole("textbox", { name: "Lifecycle reason" }), { target: { value: "Remove this release" } });
+  assert.equal(confirmDelete.disabled, false);
+  fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+  fireEvent.click(restoreRelease);
+  const restoreConfirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
+  assert.equal((within(restoreConfirm).getByRole("button", { name: "Confirm restore" }) as HTMLButtonElement).disabled, false);
+});
+
+test("remove MFA stays apart from reset authenticator and still asks for the password", async () => {
+  const owner = authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/settings", owner);
+  const view = render(<RegistryApp client={mockClient({ user: owner })} />);
+  await view.findByRole("heading", { name: "Security and access", level: 1 });
+  const reset = await view.findByRole("button", { name: "Reset authenticator" });
+  const remove = view.getByRole("button", { name: "Remove MFA" });
+  assert.notEqual(reset.parentElement, remove.parentElement);
+  const section = view.getByRole("region", { name: "Remove authenticator app" });
+  assert.equal(within(section).getByRole("button", { name: "Remove MFA" }), remove);
+  assert.equal(within(section).queryByRole("button", { name: "Reset authenticator" }), null);
+  const warning = "Remove MFA disables every authenticator app factor for this account.";
+  assert.equal(within(section).getByText(warning).textContent, warning);
+  fireEvent.click(remove);
+  fireEvent.input(view.getByLabelText("Password for MFA removal"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(view.getByRole("button", { name: "Remove MFA" }));
+  const dialog = await view.findByRole("dialog", { name: "Remove MFA from this account?" });
+  assert.equal(within(dialog).getByRole("button", { name: "Remove MFA" }).textContent, "Remove MFA");
+  assert.equal(within(dialog).queryByRole("textbox", { name: "Type the skill slug or name" }), null);
+});
+
+test("restore MySkills defaults replaces the draft and stays apart from save", async () => {
+  const owner = authUser({ email: "owner@example.com", roles: ["owner"], mfaVerified: true });
+  setupAuthenticatedDom("http://localhost/admin", owner);
+  const client = mockClient({ user: owner });
+  const updates: string[] = [];
+  client.getAdminBranding = async () => ({ text: "Acme", showText: true, logoDataUrl: null });
+  client.updateAdminBranding = async (branding) => {
+    updates.push(branding.text);
+    return branding;
+  };
+  const view = render(<RegistryApp client={client} />);
+  await view.findByRole("heading", { name: "Admin console" });
+  fireEvent.click(view.getByRole("tab", { name: "Branding" }));
+  const brandText = await view.findByRole("textbox", { name: "Brand text" }) as HTMLInputElement;
+  await waitFor(() => assert.equal(brandText.value, "Acme"));
+  const save = view.getByRole("button", { name: "Save branding" });
+  const restore = view.getByRole("button", { name: "Restore MySkills defaults" });
+  assert.notEqual(save.parentElement, restore.parentElement);
+  const section = view.getByRole("region", { name: "Preview MySkills defaults" });
+  assert.equal(within(section).getByRole("button", { name: "Restore MySkills defaults" }), restore);
+  assert.equal(within(section).queryByRole("button", { name: "Save branding" }), null);
+  const copy = "Replaces this draft with the MySkills mark and text. Nothing is saved until you choose Save branding.";
+  assert.equal(within(section).getByText(copy).textContent, copy);
+  fireEvent.click(restore);
+  assert.equal(view.queryByRole("dialog"), null);
+  assert.equal(brandText.value, "MySkills");
+  assert.deepEqual(updates, []);
 });
 
 test("release mutation refreshes parent history before offering the old artifact", async () => {

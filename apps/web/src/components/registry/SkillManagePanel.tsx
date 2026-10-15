@@ -45,6 +45,7 @@ export function SkillManagePanel({
 }) {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [reason, setReason] = useState("");
+  const [match, setMatch] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ section: Section; text: string; saved?: boolean } | null>(null);
   const confirmRef = useRef<HTMLHeadingElement>(null);
@@ -75,6 +76,7 @@ export function SkillManagePanel({
 
   function openPending(next: PendingAction) {
     setReason("");
+    setMatch("");
     setMessage(null);
     setPending(next);
     focusTarget.current = { kind: "confirm" };
@@ -85,11 +87,13 @@ export function SkillManagePanel({
     focusTarget.current = { kind: "trigger", key: pendingKey(pending) };
     setPending(null);
     setReason("");
+    setMatch("");
   }
 
   async function confirm() {
     if (!record || !pending || busy || locked) return;
     if (pending.action !== "restore" && !reason.trim()) return;
+    if (pending.kind === "skill" && pending.action === "delete" && !skillDeleteMatch(match, { slug: record.slug, title: record.title })) return;
     const section = pending.kind;
     setBusy(true);
     setMessage(null);
@@ -98,6 +102,7 @@ export function SkillManagePanel({
       else await client.performReleaseAction(record.slug, pending.version, pending.action, reason.trim() || undefined);
       setPending(null);
       setReason("");
+      setMatch("");
       setMessage({ section, saved: true, text: "Lifecycle change saved. Can manage includes archived and unpublished records." });
       focusTarget.current = { kind: "saved" };
       onChanged();
@@ -142,22 +147,33 @@ export function SkillManagePanel({
     };
     const target = pending.kind === "release" ? releases.find((item) => item.version === pending.version) ?? null : null;
     const reasonId = `${baseId}-reason`;
+    const matchId = `${baseId}-match`;
+    const skillDelete = pending.kind === "skill" && pending.action === "delete";
+    const deleteMatched = skillDelete ? skillDeleteMatch(match, { slug: record.slug, title: record.title }) : true;
+    const confirmDisabled = busy || locked || (pending.action !== "restore" && !reason.trim()) || !deleteMatched;
     return (
       <section aria-label="Confirm lifecycle change" className="manage-confirm" onKeyDown={onKeyDown}>
         <h4 ref={confirmRef} tabIndex={-1}>{label(pending.action)} {record.slug}{pending.kind === "release" ? ` ${pending.version}` : ""}</h4>
-        <p>{pending.action === "delete" ? "Deletion removes this resource from use and cannot be undone from this screen." : pending.action === "restore" ? "Restore this exact resource when its review and security state permit it." : "This changes availability through Skills. Existing local installations may require a separate action."}</p>
+        <p>{lifecycleCopy(pending)}</p>
         {pending.kind === "release" && (
           <dl className="registry-facts">
             <div><dt>Exact version</dt><dd className="registry-mono">{pending.version}</dd></div>
             {target?.artifact && <div><dt>SHA-256</dt><dd className="registry-mono">{target.artifact.sha256}</dd></div>}
           </dl>
         )}
+        {skillDelete && (
+          <label className="manage-reason" htmlFor={matchId}>
+            <span>Type the skill slug or name</span>
+            <Input aria-describedby={`${baseId}-match-help`} aria-label="Type the skill slug or name" id={matchId} value={match} disabled={busy} onChange={(event) => setMatch(event.target.value)} />
+            <small id={`${baseId}-match-help`}>{skillDeleteHelp(record)}</small>
+          </label>
+        )}
         <label className="manage-reason" htmlFor={reasonId}>
           <span>Reason {pending.action === "restore" ? "(optional)" : "(required)"}</span>
           <Input aria-label="Lifecycle reason" id={reasonId} value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} />
         </label>
         <div className="registry-actions">
-          <Button type="button" size="sm" disabled={busy || locked || (pending.action !== "restore" && !reason.trim())} variant={isDestructive(pending.action) ? "destructive" : "default"} onClick={() => void confirm()}>{busy ? "Saving…" : `Confirm ${pending.action}`}</Button>
+          <Button type="button" size="sm" disabled={confirmDisabled} variant={isDestructive(pending.action) ? "destructive" : "default"} onClick={() => void confirm()}>{busy ? "Saving…" : `Confirm ${pending.action}`}</Button>
           <Button type="button" size="sm" variant="outline" disabled={busy} onClick={cancelPending}>Cancel</Button>
         </div>
       </section>
@@ -196,14 +212,25 @@ export function SkillManagePanel({
             {historyState === "ready" && !version && <p className="registry-muted" role="status">{releases.length > 0 ? "Choose an exact release version to manage its lifecycle." : "No release records are available."}</p>}
             {historyState === "ready" && version && !release && <p className="registry-muted" role="status">Version {version} is not in this skill's release records. Choose a listed version.</p>}
             {release && <ReleaseFacts release={release} />}
-            {release && release.allowedActions.length > 0 && (
+            {release && release.allowedActions.some((action) => !isDestructive(action)) && (
               <div className="registry-actions">
-                {release.allowedActions.map((action) => (
-                  <Button className={isDestructive(action) ? "author-danger" : undefined} data-action={`release:${action}:${release.version}`} key={action} size="sm" type="button" variant="outline" disabled={busy || locked} onClick={() => openPending({ kind: "release", action, version: release.version })}>
+                {release.allowedActions.filter((action) => !isDestructive(action)).map((action) => (
+                  <Button data-action={`release:${action}:${release.version}`} key={action} size="sm" type="button" variant="outline" disabled={busy || locked} onClick={() => openPending({ kind: "release", action, version: release.version })}>
                     {label(action)} {releaseVersionLabel(release.version, releases)}
                   </Button>
                 ))}
               </div>
+            )}
+            {release && release.allowedActions.some(isDestructive) && (
+              <section aria-label="Destructive release actions" className="manage-danger">
+                <div className="registry-actions">
+                  {release.allowedActions.filter(isDestructive).map((action) => (
+                    <Button className="author-danger" data-action={`release:${action}:${release.version}`} key={action} size="sm" type="button" variant="outline" disabled={busy || locked} onClick={() => openPending({ kind: "release", action, version: release.version })}>
+                      {label(action)} {releaseVersionLabel(release.version, releases)}
+                    </Button>
+                  ))}
+                </div>
+              </section>
             )}
             {release && release.allowedActions.length === 0 && <p className="registry-muted">No lifecycle change is available for this release.</p>}
             {confirmation("release")}
@@ -213,14 +240,25 @@ export function SkillManagePanel({
             <section aria-labelledby={`${baseId}-skill`} className="registry-section">
               <h3 id={`${baseId}-skill`}>Skill lifecycle</h3>
               <p className="registry-muted">Current state: {lifecycleLabel(record.lifecycleStatus).label}</p>
-              {skillActions.length > 0 && (
+              {skillActions.some((action) => !isDestructive(action)) && (
                 <div className="registry-actions">
-                  {skillActions.map((action) => (
-                    <Button className={isDestructive(action) ? "author-danger" : undefined} data-action={`skill:${action}`} key={action} size="sm" type="button" variant="outline" disabled={busy || locked} onClick={() => openPending({ kind: "skill", action })}>
+                  {skillActions.filter((action) => !isDestructive(action)).map((action) => (
+                    <Button data-action={`skill:${action}`} key={action} size="sm" type="button" variant="outline" disabled={busy || locked} onClick={() => openPending({ kind: "skill", action })}>
                       {label(action)} skill
                     </Button>
                   ))}
                 </div>
+              )}
+              {skillActions.some(isDestructive) && (
+                <section aria-label="Destructive skill actions" className="manage-danger">
+                  <div className="registry-actions">
+                    {skillActions.filter(isDestructive).map((action) => (
+                      <Button className="author-danger" data-action={`skill:${action}`} key={action} size="sm" type="button" variant="outline" disabled={busy || locked} onClick={() => openPending({ kind: "skill", action })}>
+                        {label(action)} skill
+                      </Button>
+                    ))}
+                  </div>
+                </section>
               )}
               {confirmation("skill")}
               {sectionMessage("skill")}
@@ -297,3 +335,20 @@ function pendingKey(pending: PendingAction): string {
 function isDestructive(action: string): boolean { return action === "delete" || action === "revoke"; }
 
 function label(value: string): string { return value.charAt(0).toUpperCase() + value.slice(1); }
+
+function skillDeleteMatch(typed: string, saved: { slug: string; title: string }): boolean {
+  const value = typed.trim();
+  return value === saved.slug || value === saved.title;
+}
+
+function skillDeleteHelp(saved: { slug: string; title: string }): string {
+  if (saved.slug === saved.title) return `Type the saved slug or the saved name. Both are ${saved.slug}.`;
+  return `Type the saved slug or the saved name. The saved slug is ${saved.slug}. The saved name is ${saved.title}.`;
+}
+
+function lifecycleCopy(pending: PendingAction): string {
+  if (pending.kind === "skill" && pending.action === "delete") return "This archives the skill, the same stored state as Archive skill. Restore skill stays available.";
+  if (pending.action === "delete") return "Deletion removes this resource from use and cannot be undone from this screen.";
+  if (pending.action === "restore") return "Restore this exact resource when its review and security state permit it.";
+  return "This changes availability through Skills. Existing local installations may require a separate action.";
+}
