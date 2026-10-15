@@ -28,9 +28,10 @@ export interface DeviceLoginStore {
 }
 
 /** Same scope effects as connector consent, with the existing executor scope. */
-export function deviceRequiresMfa(scopes: ApiTokenScope[], roles: string[]): boolean {
+export function deviceRequiresMfa(scopes: readonly string[], roles: readonly string[]): boolean {
+  const readOnly: Readonly<Record<string, boolean>> = OAUTH_SCOPE_READ_ONLY;
   return roles.some((role) => role === "owner" || role === "admin" || role === "maintainer")
-    || scopes.some((scope) => scope === "targets:execute" || !OAUTH_SCOPE_READ_ONLY[scope]);
+    || scopes.some((scope) => scope === "targets:execute" || readOnly[scope] !== true);
 }
 export function freshDeviceMfa(stamp: Date | null, now: Date): boolean {
   return Boolean(stamp && Number.isFinite(stamp.getTime()) && stamp <= now && now.getTime() - stamp.getTime() < DEVICE_LOGIN_MFA_MS);
