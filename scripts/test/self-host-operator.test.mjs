@@ -5,6 +5,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
+import { hostCommandFailure } from "../lib/host-backup-service.mjs";
 
 // Failure cases, recorded before implementation. The real shell/configuration CLI runs
 // against an isolated release bundle and private config. Only Docker is replaced; it
@@ -307,6 +308,8 @@ test("recovery plan stays read-only and execute is explicit Linux-only guarded r
 });
 
 test("recovery executes exactly the quoted values validated by preflight using explicit host networking", (t) => {
+  // A numeric container UID may have no passwd home. Keep SDK home lookup on
+  // the per-container tmpfs and never import the caller's private home path.
   const f = configured(t); backup(f);
   writeFileSync(join(f.bin, "uname"), "#!/bin/sh\ncase \"$1\" in -s) echo Linux ;; *) echo x86_64 ;; esac\n", { mode: 0o755 });
   const backupPath = join(f.config, "backup.env");
@@ -316,17 +319,126 @@ test("recovery executes exactly the quoted values validated by preflight using e
   const target = join(f.root, "restore.env");
   writeFileSync(target, "MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL='postgres://fixture:password$kept@127.0.0.1:5432/fixture_test'\nMYSKILLS_RECOVERY_DESTINATION_S3_ENDPOINT='http://127.0.0.1:9900'\nMYSKILLS_RECOVERY_DESTINATION_S3_BUCKET='restore-fixture'\nMYSKILLS_RECOVERY_DESTINATION_S3_ACCESS_KEY_ID='restore-user'\nMYSKILLS_RECOVERY_DESTINATION_S3_SECRET_ACCESS_KEY='private$key'\n", { mode: 0o600 });
   const id = "2026-10-01T00-00-00.000Z_" + "e".repeat(16);
-  const run = execute(f, ["recover", "execute", id, "--target-env-file", target]); assert.equal(run.status, 0, run.output);
+  const run = execute(f, ["recover", "execute", id, "--target-env-file", target], { HOME: `/private/${canary}` }); assert.equal(run.status, 0, run.output);
   const observed = JSON.parse(readFileSync(join(f.root, "recovery-child.json")));
   assert.equal(observed.MYSKILLS_RECOVERY_DESTINATION_S3_SECRET_ACCESS_KEY, "private$key");
   assert.equal(observed.MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL, "postgres://fixture:password$kept@127.0.0.1:5432/fixture_test");
   assert.equal(observed.MYSKILLS_BACKUP_INSTANCE_ID, "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+  assert.equal(observed.HOME, "/tmp");
   const invocation = f.records().find((r) => r.args.includes("recovery-execute"));
   assert.ok(invocation.args.includes("--network") && invocation.args.includes("host"));
   assert.equal(invocation.args.includes("--env-file"), false);
   assert.doesNotMatch(run.output, /password\$kept|private\$key/);
   assert.equal(existsSync(join(f.config, "operation.lock")), false);
 });
+
+// Failure inventory before restore diagnostics: a specific failedPhase is lost through
+// configure stderr suppression; config/start/signal/timeout or malformed receipts appear
+// successful or opaque; raw provider fields, credentials and arbitrary phase text escape;
+// a Node warning hides a failure JSON receipt; duplicate/conflicting receipts are trusted;
+// known module/runtime errors remain opaque when no report can be emitted.
+test("restore phase failures survive the real operator process and reach the bounded host receipt", (t) => {
+  const stages = ["download-manifest", "download-backup", "verify-local-backup", "create-isolated-destinations",
+    "restore-database", "restore-artifacts", "verify-restored-database"];
+  for (const stage of stages) {
+    const { f, id, args } = recoveryFixture(t);
+    writeFileSync(f.restoreResponse, JSON.stringify({ status: 1, stdout: JSON.stringify({ passed: false, runId: id,
+      failedPhase: stage, message: canary, destinationDatabase: canary }) + `\nPrivate recovery evidence: /${canary}\n`, stderr: canary }));
+    const run = execute(f, args); assert.notEqual(run.status, 0);
+    const expected = { stage, reason: "restore-failed", exitStatus: 1 };
+    const receipt = run.stdout.split("\n").filter(line => line.startsWith("{")).map(line => JSON.parse(line)).at(-1);
+    assert.deepEqual(receipt, { schemaVersion: 1, kind: "myskills-restore-failure", ...expected });
+    const failure = hostCommandFailure("sh", [join(f.bundle, "myskills.sh"), ...args], run);
+    assert.deepEqual(failure.restoreFailure, expected);
+    assert.doesNotMatch(JSON.stringify(failure) + run.output, new RegExp(canary));
+    assert.equal(existsSync(join(f.config, "operation.lock")), false);
+  }
+});
+
+test("restore configuration and child failures report only fixed classifications and bounded status", (t) => {
+  const scenarios = [
+    [{ status: null, error: { code: "ENOENT", message: canary }, stderr: canary }, { stage: "restore-child", reason: "child-start-failed", exitStatus: null }],
+    [{ status: null, error: { code: "ETIMEDOUT", message: canary }, stderr: canary }, { stage: "restore-child", reason: "child-timeout", exitStatus: null }],
+    [{ status: null, signal: "SIGTERM", stderr: canary }, { stage: "restore-child", reason: "child-signalled", exitStatus: null }],
+    [{ status: 1, stdout: canary, stderr: canary }, { stage: "restore-report", reason: "missing-restore-report", exitStatus: 1 }],
+    [{ status: 1, stdout: JSON.stringify({ passed: false, failedPhase: canary }) }, { stage: "restore-report", reason: "invalid-restore-report", exitStatus: 1 }],
+    [{ status: 1, stderr: JSON.stringify({ passed: false, failedPhase: "configuration-or-restore", message: canary }) }, { stage: "configuration-or-restore", reason: "restore-failed", exitStatus: 1 }],
+    [{ status: 1, stderr: JSON.stringify({ passed: false, failedPhase: "deadline" }) }, { stage: "deadline", reason: "restore-failed", exitStatus: 1 }],
+    [{ status: 1, stderr: `Warning: Ignoring extra certs from '${canary}', load failed\n` + JSON.stringify({ passed: false, failedPhase: "configuration-or-restore", message: canary }) }, { stage: "configuration-or-restore", reason: "restore-failed", exitStatus: 1 }],
+    [{ status: 1, stderr: `Error [ERR_MODULE_NOT_FOUND]: Cannot find package '${canary}'\n` }, { stage: "restore-child", reason: "child-module-load-failed", exitStatus: 1, sourceLocation: null }],
+    [{ status: 1, stderr: `Error: Cannot find module '${canary}'\n  code: 'MODULE_NOT_FOUND',\n` }, { stage: "restore-child", reason: "child-module-load-failed", exitStatus: 1, sourceLocation: null }],
+    ...["SyntaxError", "ReferenceError", "TypeError"].map(name => [{ status: 1, stderr: `${name}: ${canary}\n` }, { stage: "restore-child", reason: "child-runtime-failed", exitStatus: 1, sourceLocation: null }]),
+    [{ status: 1, stderr: `UnhandledPromiseRejection: ${canary}\n  code: 'ERR_UNHANDLED_REJECTION'\n` }, { stage: "restore-child", reason: "child-unhandled-rejection", exitStatus: 1, sourceLocation: null }],
+    [{ status: 1, stderr: `Error: ${canary}\n` }, { stage: "restore-report", reason: "missing-restore-report", exitStatus: 1 }],
+    [{ status: 1, stderr: Array(2).fill(JSON.stringify({ passed: false, failedPhase: "deadline" })).join("\n") }, { stage: "restore-report", reason: "invalid-restore-report", exitStatus: 1 }],
+    [{ status: 1, stdout: JSON.stringify({ passed: false, runId: "2026-10-01T00-00-00.000Z_" + "e".repeat(16), failedPhase: "restore-database" }), stderr: JSON.stringify({ passed: false, failedPhase: "deadline" }) }, { stage: "restore-report", reason: "invalid-restore-report", exitStatus: 1 }],
+    [{ status: 1, stderr: "x".repeat(16_384) + "\n" + JSON.stringify({ passed: false, failedPhase: "deadline" }) }, { stage: "restore-report", reason: "invalid-restore-report", exitStatus: 1 }],
+    [{ status: 1, stderr: "Warning: ignored\n".repeat(64) + JSON.stringify({ passed: false, failedPhase: "deadline" }) }, { stage: "restore-report", reason: "invalid-restore-report", exitStatus: 1 }],
+    [{ status: 0, stderr: JSON.stringify({ passed: true, runId: "2026-10-01T00-00-00.000Z_" + "e".repeat(16) }) }, { stage: "restore-report", reason: "invalid-restore-report", exitStatus: 0 }],
+    [{ status: 0, stdout: JSON.stringify({ passed: true, runId: "wrong-identity" }) }, { stage: "restore-report", reason: "report-identity-mismatch", exitStatus: 0 }],
+  ];
+  for (const [response, expected] of scenarios) {
+    const { f, args } = recoveryFixture(t); writeFileSync(f.restoreResponse, JSON.stringify(response));
+    const run = execute(f, args); assert.notEqual(run.status, 0);
+    assert.deepEqual(hostCommandFailure("sh", [join(f.bundle, "myskills.sh"), ...args], run).restoreFailure, expected);
+    assert.doesNotMatch(run.output, new RegExp(canary));
+  }
+  const { f, args, target } = recoveryFixture(t); writeFileSync(target, `INVALID=${canary}\n`);
+  const run = execute(f, args); assert.notEqual(run.status, 0);
+  assert.deepEqual(hostCommandFailure("sh", [join(f.bundle, "myskills.sh"), ...args], run).restoreFailure,
+    { stage: "configuration", reason: "configuration-rejected", exitStatus: null });
+  assert.equal(existsSync(join(f.root, "recovery-child.json")), false);
+});
+
+// An EventEmitter error bypasses the CLI catch. Its standard Node header and
+// an unhandled-rejection code must classify without exporting stack/message text.
+test("restore child unhandled error and rejection reports stay bounded without a JSON receipt", (t) => {
+  const unhandled = spawnSync(process.execPath, ["--eval", `const { EventEmitter } = require('node:events'); new EventEmitter().emit('error', new Error(${JSON.stringify(canary)}));`], { encoding: "utf8" });
+  assert.equal(unhandled.status, 1);
+  for (const [stderr, reason] of [[unhandled.stderr, "child-unhandled-error"], [`Error [ERR_UNHANDLED_REJECTION]: ${canary}\n`, "child-unhandled-rejection"]]) {
+    const { f, args } = recoveryFixture(t);
+    writeFileSync(f.restoreResponse, JSON.stringify({ status: 1, stderr }));
+    const run = execute(f, args); assert.notEqual(run.status, 0);
+    const failure = hostCommandFailure("sh", [join(f.bundle, "myskills.sh"), ...args], run);
+    assert.deepEqual(failure.restoreFailure, { stage: "restore-child", reason, exitStatus: 1, sourceLocation: null });
+    assert.doesNotMatch(run.output + JSON.stringify(failure), new RegExp(canary));
+  }
+});
+
+test("restore success still requires its matching receipt on the first stdout line", (t) => {
+  const { f, id, args } = recoveryFixture(t);
+  writeFileSync(f.restoreResponse, JSON.stringify({ status: 0, stdout: `Warning: ${canary}\n` + JSON.stringify({ passed: true, runId: id }) }));
+  const run = execute(f, args); assert.notEqual(run.status, 0);
+  assert.deepEqual(hostCommandFailure("sh", [join(f.bundle, "myskills.sh"), ...args], run).restoreFailure,
+    { stage: "restore-report", reason: "invalid-restore-report", exitStatus: 0 });
+  assert.doesNotMatch(run.output, new RegExp(canary));
+});
+
+test("restore child source locations allow only known script frames and bounded line numbers", (t) => {
+  for (const [frame, sourceLocation] of [
+    ["    at restoreSnapshot (file:///app/scripts/lib/registry-recovery.mjs:311:12)", { source: "registry-recovery", line: 311 }],
+    ["    at async file:///app/scripts/lib/registry-backup.mjs:286:5", { source: "registry-backup", line: 286 }],
+    ["    at file:///app/scripts/restore-registry-backup.mjs:17:3", { source: "restore-cli", line: 17 }],
+    [`    at file:///private/${canary}.mjs:123:4`, null],
+    ["    at file:///app/scripts/lib/registry-recovery.mjs:10001:4", null],
+  ]) {
+    const { f, args } = recoveryFixture(t);
+    writeFileSync(f.restoreResponse, JSON.stringify({ status: 1, stderr: `TypeError: ${canary}\n${frame}\n` }));
+    const run = execute(f, args); assert.notEqual(run.status, 0);
+    const failure = hostCommandFailure("sh", [join(f.bundle, "myskills.sh"), ...args], run);
+    assert.deepEqual(failure.restoreFailure, { stage: "restore-child", reason: "child-runtime-failed", exitStatus: 1, sourceLocation });
+    assert.doesNotMatch(run.output + JSON.stringify(failure), new RegExp(canary));
+    assert.doesNotMatch(JSON.stringify(failure), /file:\/\/\/|\/app\/scripts/);
+  }
+});
+
+function recoveryFixture(t) {
+  const f = configured(t); backup(f);
+  writeFileSync(join(f.bin, "uname"), "#!/bin/sh\ncase \"$1\" in -s) echo Linux ;; *) echo x86_64 ;; esac\n", { mode: 0o755 });
+  const target = join(f.root, "restore.env"), id = "2026-10-01T00-00-00.000Z_" + "e".repeat(16);
+  writeFileSync(target, "MYSKILLS_RECOVERY_DESTINATION_POSTGRES_URL='postgres://fixture:fixture@127.0.0.1/fixture_test'\nMYSKILLS_RECOVERY_DESTINATION_S3_ENDPOINT='http://127.0.0.1:9900'\nMYSKILLS_RECOVERY_DESTINATION_S3_BUCKET='restore-fixture'\nMYSKILLS_RECOVERY_DESTINATION_S3_ACCESS_KEY_ID='fixture-user'\nMYSKILLS_RECOVERY_DESTINATION_S3_SECRET_ACCESS_KEY='fixture-secret'\n", { mode: 0o600 });
+  return { f, id, target, args: ["recover", "execute", id, "--target-env-file", target] };
+}
 
 test("unsafe restore destinations fail before the guarded restore child receives configuration", (t) => {
   for (const invalid of ["database", "storage", "source-bucket"]) {
@@ -354,9 +466,10 @@ function fixture(t) {
   const f = { root: dir, bundle: join(dir, "bundle"), config: join(dir, "private"), bin: join(dir, "bin"), answers: join(dir, "answers.json"), log: join(dir, "docker.jsonl"), failure: join(dir, "failure"),
     syncLog: join(dir, "sync.jsonl"), syncFailure: join(dir, "sync-failure"), replacement: join(dir, "replace-input.json") };
   mkdirSync(f.bundle); mkdirSync(f.bin); makeBundle(f.bundle, version); writeFileSync(f.answers, JSON.stringify(answers), { mode: 0o600 });
+  f.restoreResponse = join(dir, "restore-response.json");
   const preload = join(dir, "child-preload.mjs");
   writeFileSync(preload, `import cp from 'node:child_process';import fs from 'node:fs';import {basename} from 'node:path';import {syncBuiltinESMExports} from 'node:module';
-const original=cp.spawnSync;cp.spawnSync=(command,args,options)=>{if(args?.[0]?.endsWith('/restore-registry-backup.mjs')){fs.writeFileSync(${JSON.stringify(join(dir,"recovery-child.json"))},JSON.stringify(options.env),{mode:384});return {status:0,stdout:JSON.stringify({passed:true,runId:args[2]})+'\\n',stderr:''};}return original(command,args,options);};
+const original=cp.spawnSync;cp.spawnSync=(command,args,options)=>{if(args?.[0]?.endsWith('/restore-registry-backup.mjs')){fs.writeFileSync(${JSON.stringify(join(dir,"recovery-child.json"))},JSON.stringify(options.env),{mode:384});if(fs.existsSync(${JSON.stringify(f.restoreResponse)}))return JSON.parse(fs.readFileSync(${JSON.stringify(f.restoreResponse)},'utf8'));return {status:0,stdout:JSON.stringify({passed:true,runId:args[2]})+'\\n',stderr:''};}return original(command,args,options);};
 const open=fs.openSync,close=fs.closeSync,sync=fs.fsyncSync,rename=fs.renameSync;const paths=new Map();let renamed;
 const record=(event,target)=>fs.appendFileSync(${JSON.stringify(f.syncLog)},JSON.stringify({event,target})+'\\n');
 const rp=${JSON.stringify(f.replacement)};let change=fs.existsSync(rp)?JSON.parse(fs.readFileSync(rp)):null;
@@ -389,7 +502,7 @@ function makeBundle(dir, bundleVersion) {
 
 function releaseEnv(v = version) { return ["api", "web", "mcp", "ops", "minio", "postgres"].map((name) => `MYSKILLS_${name.toUpperCase()}_IMAGE=registry.operator.test/myskills/${name}@sha256:${digest}`).join("\n") + `\nMYSKILLS_SOURCE_COMMIT=${v === version ? commit : "d".repeat(40)}\nMYSKILLS_VERSION=${v}\n`; }
 function sums(f) { const names = ["myskills.sh", ".env.example", ".env.bootstrap.example", "compose.yml", "release.env", "release-manifest.json", ...["api", "web", "mcp", "ops", "minio", "postgres"].flatMap((name) => ["amd64", "arm64"].map((cpu) => `${name}-${cpu}.json`))].sort(); writeFileSync(join(f.bundle, "SHA256SUMS"), names.map((name) => `${createHash("sha256").update(readFileSync(join(f.bundle, name))).digest("hex")}  ${name}\n`).join("")); }
-function execute(f, args) { const run = spawnSync("sh", [join(f.bundle, "myskills.sh"), ...args, "--config-dir", f.config], { env: { ...process.env, PATH: `${f.bin}:${process.env.PATH}`, FAKE_DOCKER_LOG: f.log, FAKE_DOCKER_FAILURE: f.failure }, encoding: "utf8" }); return { ...run, output: `${run.stdout ?? ""}${run.stderr ?? ""}` }; }
+function execute(f, args, environment = {}) { const run = spawnSync("sh", [join(f.bundle, "myskills.sh"), ...args, "--config-dir", f.config], { env: { ...process.env, ...environment, PATH: `${f.bin}:${process.env.PATH}`, FAKE_DOCKER_LOG: f.log, FAKE_DOCKER_FAILURE: f.failure }, encoding: "utf8" }); return { ...run, output: `${run.stdout ?? ""}${run.stderr ?? ""}` }; }
 function configured(t) { const f = fixture(t); const run = execute(f, ["setup", "--answers-file", f.answers]); assert.equal(run.status, 0, run.output); rmSync(f.log); return f; }
 function composeCalls(f) { return f.records().filter((record) => record.args[0] === "compose").map((record) => record.args.slice(record.args.indexOf(join(f.config, "runtime.env")) + 1).join(" ")); }
 function assertOrder(calls, fragments) { let position = -1; for (const fragment of fragments) { const next = calls.findIndex((call, index) => index > position && call.includes(fragment)); assert.ok(next > position, `${fragment} missing or out of order: ${JSON.stringify(calls)}`); position = next; } }

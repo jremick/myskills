@@ -12,6 +12,38 @@ import { hostDocker, saveHostLedger } from "../lib/host-rehearsal-resources.mjs"
 // an arbitrary route or stack path is accepted; oversized stderr widens capture;
 // non-driver commands change behavior; adding a receipt turns failure into pass.
 const driverArgs = ["run", "--label", "io.myskills.host-rehearsal.role=driver", "fixture-image", "node", "/proof/fixture.mjs", "create", "/proof/fresh.json"];
+// Restore diagnostics must reject missing, duplicate, oversized or forged receipts,
+// omit arbitrary fields, and leave non-recovery command receipts unchanged.
+test("operator restore diagnostics accept only one bounded receipt and never expose provider text", () => {
+  const args = ["/private/bundle/myskills.sh", "recover", "execute", "private-canary"];
+  const marker = { schemaVersion: 1, kind: "myskills-restore-failure", stage: "restore-database", reason: "restore-failed", exitStatus: 1 };
+  const valid = JSON.stringify({ ...marker, message: "private-canary", destination: "postgres://private-canary" });
+  const failure = hostCommandFailure("sh", args, { status: 1, stdout: `Restore configuration passed.\n${valid}\n`, stderr: "private-canary" });
+  assert.deepEqual(failure.restoreFailure, { stage: "restore-database", reason: "restore-failed", exitStatus: 1 });
+  assert.doesNotMatch(JSON.stringify(failure), /private-canary|postgres:/);
+  for (const reason of ["child-module-load-failed", "child-runtime-failed", "child-unhandled-rejection", "child-unhandled-error"]) {
+    const stdout = JSON.stringify({ ...marker, stage: "restore-child", reason, message: "private-canary" });
+    assert.deepEqual(hostCommandFailure("sh", args, { status: 1, stdout }).restoreFailure,
+      { stage: "restore-child", reason, exitStatus: 1, sourceLocation: null });
+  }
+  for (const sourceLocation of [{ source: "private-canary", line: 1 }, { source: "registry-recovery", line: 10001 }, { source: "registry-recovery", line: "1" }]) {
+    const stdout = JSON.stringify({ ...marker, stage: "restore-child", reason: "child-runtime-failed", sourceLocation });
+    const bounded = hostCommandFailure("sh", args, { status: 1, stdout }).restoreFailure;
+    assert.equal(bounded.sourceLocation, null); assert.doesNotMatch(JSON.stringify(bounded), /private-canary/);
+  }
+  for (const stdout of [undefined, "private-canary", "{broken private-canary", `${valid}\n${valid}`,
+    "x".repeat(16_384) + valid, ...[{ stage: "private-canary" }, { reason: "private-canary" }, { exitStatus: 256 },
+      { exitStatus: -1 }, { exitStatus: "1" }, { schemaVersion: 2 }, { kind: "private-canary" }].map(fields => JSON.stringify({ ...marker, ...fields }))]) {
+    const rejected = hostCommandFailure("sh", args, { status: 1, stdout, stderr: "private-canary" });
+    assert.deepEqual(rejected.restoreFailure, { stage: "operator", reason: "diagnostic-unavailable", exitStatus: 1 });
+    assert.doesNotMatch(JSON.stringify(rejected), /private-canary/);
+  }
+  assert.equal(hostCommandFailure("sh", args, { status: -1 }).restoreFailure.exitStatus, null);
+  for (const [command, other] of [["docker", args], ["sh", [args[0], "backup", "execute"]], ["sh", [args[0], "recover", "plan"]]]) {
+    assert.equal(hostCommandFailure(command, other, { status: 1, stdout: valid }).restoreFailure, undefined);
+  }
+});
+
 test("driver rejection reports only fixed error class, exact fixture lines and whitelisted HTTP status", () => {
   const stderr = "AssertionError [ERR_ASSERTION]: HTTP /v1/auth/login expected 200; returned 401\nprivate-canary PASSWORD=private-canary https://private-canary.invalid\n    at api (file:///proof/fixture.mjs:124:12)\n    at async file:///proof/fixture.mjs:138:17\n";
   const result = { status: 1, signal: null, stderr }; let failure;

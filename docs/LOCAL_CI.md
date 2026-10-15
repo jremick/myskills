@@ -42,10 +42,27 @@ The default is serial. The four lanes are browser Node 22; browser Node 24; Post
 Node 22; and PostgreSQL then check Node 24 then Railway images. Each lane waits for its current
 job's cleanup before starting the next job. A job failure does not suppress the other required
 jobs. Cancellation stops all active steps and skips queued jobs. Release checks and CodeQL stay
-serial. Four-lane execution does not change the seven-job gate, source checks or result contract.
+serial. Parallel execution does not change the seven-job gate, source checks or result contract.
 
-Keep the external worker's global job lock around the whole invocation. The four-lane measurement
-does not justify concurrent app runs or additional lanes. Set `LOCAL_CI_VERIFY_LANES=1`, or remove
+Set `LOCAL_CI_VERIFY_LANES=6` to use a shared queue with at most six active jobs. Jobs follow the
+canonical verification order; a free lane takes the next queued job only after its current job
+finishes cleanup. This mode requires a separate capacity comparison on the intended worker.
+
+For a bounded `verify` comparison, set `LOCAL_CI_MOCKED_BROWSER_WORKERS=2` to run the web
+mocked-browser suite with two file-level Playwright workers on each Node version. The default
+is one worker. Tests within each file remain serial; full-stack and product-site suites retain
+their own worker settings. The runner does not pass `TEST_DATABASE_URL` to the mocked suite:
+its database-backed GitHub journey remains skipped and branding uses its in-memory store.
+Do not pass a shared database to parallel browser files. Keep the outer lane count, VM CPU
+allocation, source commit and cache preparation equal when measuring this option.
+
+Mocked-browser comparisons disable retries and stop on the first failure. Failed or cancelled
+web jobs retain raw reports and traces in the private run's `browser-diagnostics/<job>` directory
+before their source clone is removed. Keep these diagnostics private; they are not release artifacts.
+Vite output is included in the browser job log.
+
+Keep the external worker's global job lock around the whole invocation. Internal parallelism
+does not permit concurrent app runs. Set `LOCAL_CI_VERIFY_LANES=1`, or remove
 the variable, to roll back to serial execution without changing any gate.
 
 Release verification needs the release tag at `HEAD` and a main ref that contains it:
@@ -74,13 +91,13 @@ LOCAL_CI_CODEQL_BIN=/path/to/codeql/codeql scripts/local-ci.sh codeql
 | `LOCAL_CI_RUN_ID` | Required. 1-48 lowercase letters, digits or hyphens. It names every container, Compose project, image tag and the workspace. |
 | `LOCAL_CI_EVIDENCE_DIR` | Required. Absolute, outside the source tree, not a symbolic link, and absent or empty. Every file in it is scanned and exported, so a populated directory is refused. |
 | `LOCAL_CI_SOURCE_SHA` | Optional. Must equal `HEAD`. Without it the result is not gating. |
-| `LOCAL_CI_VERIFY_LANES` | Optional: `1` (default) or `4`. Four lanes are accepted only for `verify`. Partial selections use the same lanes and remain non-gating. |
+| `LOCAL_CI_VERIFY_LANES` | Optional: `1` (default), `4` (fixed groups) or `6` (shared queue). Parallel modes are accepted only for `verify`. Partial selections remain non-gating. |
 | `LOCAL_CI_NODE22_BIN`, `LOCAL_CI_NODE24_BIN` | Directories containing `node`, `npm` and `npx`. When unset, `node` on `PATH` is used only for its own major version. |
 | `LOCAL_CI_WORK_DIR` | Optional parent for the per-run workspace. Defaults to the OS temporary directory. |
 | `DOCKER_HOST`, `DOCKER_CONTEXT` | Jobs that use Docker need a local `unix://` endpoint; a remote endpoint is refused. Set at most one of the two, because `DOCKER_CONTEXT` overrides `DOCKER_HOST`. |
 | `LOCAL_CI_RELEASE_TAG`, `LOCAL_CI_MAIN_REF` | `release-check` only. The tag must be `v<package version>` and point at `HEAD`. `HEAD` must be an ancestor of the main ref (default `refs/remotes/origin/main`). The script does not fetch. |
 | `LOCAL_CI_CODEQL_BIN`, `LOCAL_CI_CODEQL_CATEGORY` | `codeql` only. The category defaults to `/language:javascript-typescript`. |
-| `MYSKILLS_E2E_PORT`, `MYSKILLS_E2E_WEB_PORT`, `MYSKILLS_E2E_MAILPIT_PORT` | Optional loopback ports. Mocked-browser ports are probed when unset. Automatic fullstack web/Mailpit ports are assigned by Docker at bind time and read from the exact running project/service. Explicit fullstack ports must match readback. With four lanes and both browser jobs selected, overrides are refused. |
+| `MYSKILLS_E2E_PORT`, `MYSKILLS_E2E_WEB_PORT`, `MYSKILLS_E2E_MAILPIT_PORT` | Optional loopback ports. Mocked-browser ports are probed when unset. Automatic fullstack web/Mailpit ports are assigned by Docker at bind time and read from the exact running project/service. Explicit fullstack ports must match readback. With parallel execution and both browser jobs selected, overrides are refused. |
 
 Jobs receive an allowlisted environment (paths, locale, Docker endpoint, proxy and CA settings,
 browser and npm caches) with `CI=true`. Tokens such as `GITHUB_TOKEN` or `NPM_TOKEN` are not
