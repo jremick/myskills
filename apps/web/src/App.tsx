@@ -12,6 +12,8 @@ import {
   hasDeviceDraft,
   initialCompletion,
   reduceCompletion,
+  SIGN_IN_TEXT,
+  signInCopy,
   stepUpFromLogin,
 } from "./sign-in-flow.js";
 import { ConfirmationDialog, type ConfirmationRequest } from "@/components/ui/confirmation-dialog";
@@ -1359,7 +1361,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     { view: "organizations" as const, label: "Organizations", group: "People" as const, icon: <Building2 size={18} aria-hidden="true" />, enabled: canUseOrganizations },
     { view: "admin" as const, label: "Admin", group: "Account" as const, icon: <Shield size={18} aria-hidden="true" />, enabled: canUseAdmin },
     { view: "settings" as const, label: "Settings", group: "Account" as const, icon: <UserCog size={18} aria-hidden="true" />, enabled: Boolean(session) },
-    { view: "login" as const, label: "Login", group: "Account" as const, icon: <LogIn size={18} aria-hidden="true" />, enabled: !session },
+    { view: "login" as const, label: signInCopy(import.meta.env?.VITE_REQUEST_ACCESS_URL).navLabel, group: "Account" as const, icon: <LogIn size={18} aria-hidden="true" />, enabled: !session },
   ].filter((item) => item.enabled);
   const navGroups = (["Skills", "Publish", "Deploy", "People", "Account"] as const)
     .map((label) => ({ label, items: navItems.filter((item) => item.group === label) }))
@@ -1969,13 +1971,15 @@ function LoginPage({
   onPasswordReset: (input: { email: string }) => Promise<void>;
   onVerifyMfa: (codeOrRecoveryCode: string) => Promise<void>;
 }) {
+  const copy = signInCopy(import.meta.env?.VITE_REQUEST_ACCESS_URL);
   const [resetMode, setResetMode] = useState(false);
   const step = mfaPending ? "mfa" : resetMode ? "reset" : "login";
+  const heading = step === "mfa" ? "Verify sign-in" : step === "reset" ? "Reset password" : copy.heading;
   return (
     <>
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <main className="login-page" id="main-content">
-      <nav className="login-nav" aria-label="Login navigation">
+      <nav className="login-nav" aria-label={copy.navAria}>
         {showLandingLink ? <a className="landing-brand" href="/" onClick={(event) => handleCallbackLink(event, onHome)}>
           <BrandIdentity horizontal />
         </a> : <span className="landing-brand"><BrandIdentity horizontal /></span>}
@@ -1984,10 +1988,10 @@ function LoginPage({
         </Button>}
       </nav>
       <section className="login-panel" aria-labelledby="login-heading">
-        <p className="landing-status">Public beta. Hosted signups are closed.</p>
-        <h1 id="login-heading">{step === "mfa" ? "Verify sign-in" : step === "reset" ? "Reset password" : "Login"}</h1>
+        <h1 id="login-heading">{heading}</h1>
         {step === "login" && <>
-          <p>Use an approved owner or team account to sign in. Need an account? Ask the instance owner for an invitation and follow the email link.</p>
+          <p>{copy.lede}</p>
+          {copy.requestAccess && <p><a href={copy.requestAccess.href}>{copy.requestAccess.label}</a></p>}
           <p><a href="/registry">Browse public skills</a> · <a href="https://github.com/jremick/myskills/blob/main/docs/GETTING_STARTED.md">Self-host MySkills</a></p>
         </>}
         <AuthWidget
@@ -2065,7 +2069,7 @@ function InvitationRegistrationPage({
       setPassword("");
       setConfirmPassword("");
       setState("ready");
-      setMessage("Registration complete. You can now log in.");
+      setMessage(SIGN_IN_TEXT.invitationDone);
     } catch (error) {
       setLinkInvalid(apiErrorCode(error) === "INVALID_INVITATION_TOKEN");
       setState("error");
@@ -2082,7 +2086,7 @@ function InvitationRegistrationPage({
             <BrandIdentity horizontal />
           </a>
           <Button asChild className="login-back shadcn-action-button" size="sm" variant="outline">
-            <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>Login</a>
+            <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>{SIGN_IN_TEXT.navLabel}</a>
           </Button>
         </nav>
         <section className="login-panel" aria-labelledby="invitation-registration-heading">
@@ -2164,7 +2168,7 @@ function InvitationRegistrationPage({
             <Button asChild className="save-button shadcn-action-button" size="sm">
               <a href="/login" onClick={(event) => handleCallbackLink(event, onLogin)}>
                 <LogIn size={16} aria-hidden="true" />
-                {state === "ready" ? "Continue to login" : "Return to login"}
+                {state === "ready" ? SIGN_IN_TEXT.continue : SIGN_IN_TEXT.return}
               </a>
             </Button>
           )}
@@ -5114,7 +5118,7 @@ function AuthWidget({
   const forgotRef = useRef<HTMLButtonElement>(null);
 
   // Focus moves only when the step changes, never on a keystroke: to the
-  // step's first field, or back to "Forgot password?" after "Back to login".
+  // step's first field, or back to "Forgot password?" after "Back to sign in".
   useEffect(() => {
     if (previousStep.current === step) return;
     previousStep.current = step;
@@ -5249,7 +5253,7 @@ function AuthWidget({
           backToLogin.current = true;
           onResetModeChange(false);
         }}>
-          Back to login
+          {SIGN_IN_TEXT.back}
         </Button>
         <AuthMessage message={authMessage} />
       </form>

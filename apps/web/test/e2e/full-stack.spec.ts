@@ -261,9 +261,9 @@ test("owner invites a user who registers, logs in and enrolls MFA from the rende
   await page.getByLabel("Password", { exact: true }).fill(inviteePassword);
   await page.getByLabel("Confirm password").fill(inviteePassword);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByText("Registration complete. You can now log in.")).toBeVisible();
+  await expect(page.getByText("Registration complete. You can now sign in.")).toBeVisible();
 
-  await page.getByRole("link", { name: "Continue to login" }).click();
+  await page.getByRole("link", { name: "Continue to sign in" }).click();
   await page.getByLabel("Email").fill(inviteeEmail);
   await page.getByLabel("Password").fill(inviteePassword);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
