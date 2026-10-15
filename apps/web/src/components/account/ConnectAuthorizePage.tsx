@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CircleAlert, LogIn, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { connectPresentation } from "../../sign-in-flow.js";
 import type { OAuthAuthorizationDetails, OAuthConnectionClient } from "../../oauth-api.js";
 
 type PageState =
@@ -151,6 +152,7 @@ function ConsentDetails({
 }) {
   // Legacy servers expose only these two read scopes. Never infer that a new
   // or unknown scope is read-only from its spelling or from a cached session.
+  const presentation = connectPresentation({ mfaRequired: details.mfaRequired, scopes: details.scopes });
   const readOnly = details.scopes.length > 0 && details.scopes.every((scope) =>
     scope.readOnly === true || (scope.readOnly === undefined && ["skills:read", "architectures:read"].includes(scope.scope)));
   const allowsChanges = details.scopes.some((scope) => scope.readOnly === false);
@@ -179,10 +181,10 @@ function ConsentDetails({
       </dl>
       <h2 className="connect-subheading">This app will be able to</h2>
       <ul className="connect-scopes">
-        {details.scopes.map((scope) => (
-          <li key={scope.scope}>
+        {presentation.lines.map((line) => (
+          <li key={line.key}>
             <ShieldCheck size={16} aria-hidden="true" />
-            <span><code>{scope.scope}</code> {scope.description}</span>
+            <span>{line.text}</span>
           </li>
         ))}
       </ul>
@@ -203,7 +205,7 @@ function ConsentDetails({
         </div>
       )}
       <div className="connect-actions">
-        <Button className="shadcn-action-button" disabled={details.mfaRequired || deciding !== null} size="sm" type="button" onClick={() => onDecide("approve")}>
+        <Button className="shadcn-action-button" disabled={presentation.gate.kind === "mfa" || deciding !== null} size="sm" type="button" onClick={() => onDecide("approve")}>
           {deciding === "approve" ? "Allowing…" : "Allow access"}
         </Button>
         <Button disabled={deciding !== null} size="sm" type="button" variant="outline" onClick={() => onDecide("deny")}>

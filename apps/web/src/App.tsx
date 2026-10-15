@@ -3,6 +3,7 @@ import { SkillPreview } from "@/components/registry/SkillPreview";
 import { RecoveryGuidancePanel } from "./components/operations/RecoveryGuidancePanel.js";
 import { APPLICATION_SCOPES } from "@myskills-app/core";
 import { DeviceAuthorizePage } from "./components/DeviceAuthorizePage.js";
+import { apiTokenScopeLabel, hasDeviceDraft, stepUpFromLogin } from "./sign-in-flow.js";
 import { ConfirmationDialog, type ConfirmationRequest } from "@/components/ui/confirmation-dialog";
 import { MarketingLanding } from "./components/marketing/MarketingLanding.js";
 import { LandingSettings } from "./components/marketing/LandingSettings.js";
@@ -214,42 +215,8 @@ function operationKey(action: "install"): string {
   return `${action}:${random.replaceAll("-", "")}`;
 }
 
-const API_TOKEN_SCOPE_LABELS: Record<ApiTokenScope, string> = {
-  "profile:read": "Profile",
-  "skills:read": "Read skills",
-  "architectures:read": "Read architectures",
-  "skills:submit": "Submit skills",
-  "libraries:read": "Read libraries",
-  "libraries:write": "Manage libraries",
-  "review:read": "Review read",
-  "review:write": "Review write",
-  "targets:execute": "Execute target updates",
-  "improvements:read": "Read improvement plans and evidence",
-  "improvements:configure": "Configure improvement policies",
-  "improvements:run": "Run skill improvements",
-  "improvements:report": "Share and review improvement evidence",
-  "account:connections:revoke": "Revoke own remote connections",
-  "account:read": "Read account security metadata",
-  "account:tokens:revoke": "Revoke own API keys",
-  "admin:read": "Read administration settings and audit history",
-  "admin:settings": "Manage instance settings",
-  "admin:tokens:revoke": "Revoke administered API keys",
-  "admin:users": "Manage users, roles and invitations",
-  "architectures:write": "Manage architectures",
-  "libraries:bind": "Bind libraries to architectures and targets",
-  "organizations:read": "Read organizations",
-  "organizations:write": "Manage organizations",
-  "sharing:read": "Read skill sharing settings",
-  "sharing:write": "Manage skill sharing",
-  "skills:manage": "List managed skills",
-  "submissions:read": "Read and export own submissions",
-  "targets:control": "Manage targets and schedule operations",
-  "targets:read": "Read targets and operations",
-  "teams:read": "Read teams",
-  "teams:write": "Manage teams",
-};
 const API_TOKEN_SCOPE_OPTIONS = [...APPLICATION_SCOPES, "targets:execute" as const]
-  .map((scope) => ({ scope, label: API_TOKEN_SCOPE_LABELS[scope] }));
+  .map((scope) => ({ scope, label: apiTokenScopeLabel(scope) }));
 
 export function RegistryApp({ client }: RegistryAppProps) {
   const registryClient = useMemo(() => client ?? createRegistryClient(), [client]);
@@ -1084,8 +1051,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   // Return to a pending remote-connection consent after sign-in. The only
   // return target is the fixed consent path; no URL is taken from input.
   function openAfterSignIn() {
-    if (readDeviceLoginReturn()) {
-      try { sessionStorage.removeItem("myskills:device-login-return"); } catch { /* Private browsing can disable storage. */ }
+    if (hasDeviceDraft()) {
       setView("device");
       pushAppHistory("/auth/device");
       return;
@@ -1162,6 +1128,20 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     }
   }
 
+  async function verifyBrowserMfa(input: { challengeToken: string; codeOrRecoveryCode: string }) {
+    const result = await registryClient.verifyMfa({
+      challengeToken: input.challengeToken,
+      codeOrRecoveryCode: input.codeOrRecoveryCode,
+    });
+    const nextSession = {
+      expiresAt: result.expiresAt,
+      user: await registryClient.getMe(),
+    };
+    setSession(nextSession);
+    writeStoredSession(nextSession);
+    return nextSession;
+  }
+
   async function handleVerifyMfa(codeOrRecoveryCode: string) {
     if (!mfaPending) {
       return;
@@ -1169,16 +1149,10 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     setAuthState("loading");
     setAuthMessage(null);
     try {
-      const result = await registryClient.verifyMfa({
+      await verifyBrowserMfa({
         challengeToken: mfaPending.challengeToken,
         codeOrRecoveryCode,
       });
-      const nextSession = {
-        expiresAt: result.expiresAt,
-        user: await registryClient.getMe(),
-      };
-      setSession(nextSession);
-      writeStoredSession(nextSession);
       setMfaPending(null);
       setAuthState("idle");
       openAfterSignIn();
@@ -1298,10 +1272,28 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
   }
 
   if (activeView === "device") {
-    return <DeviceAuthorizePage client={registryClient.deviceLogin} signedIn={Boolean(session)} onSignIn={() => {
-      try { sessionStorage.setItem("myskills:device-login-return", "1"); } catch { /* The user can reopen /auth/device after signing in. */ }
-      openLogin();
-    }} />;
+    return (
+      <DeviceAuthorizePage
+        client={registryClient.deviceLogin}
+        signedIn={Boolean(session)}
+        stepUp={{
+          async login(input) {
+            const result = await registryClient.login(input);
+            const mapped = stepUpFromLogin(result);
+            if (mapped.kind === "signed_in") {
+              const nextSession = { expiresAt: result.expiresAt, user: await registryClient.getMe() };
+              setSession(nextSession);
+              writeStoredSession(nextSession);
+            }
+            return mapped;
+          },
+          async verify(input) {
+            await verifyBrowserMfa({ challengeToken: input.challengeToken, codeOrRecoveryCode: input.code });
+          },
+        }}
+        onSignIn={openLogin}
+      />
+    );
   }
 
   if (activeView === "login") {
@@ -6795,6 +6787,3 @@ function clearStoredSession(): void {
   window.localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
-function readDeviceLoginReturn(): boolean {
-  try { return sessionStorage.getItem("myskills:device-login-return") === "1"; } catch { return false; }
-}
