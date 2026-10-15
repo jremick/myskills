@@ -337,7 +337,29 @@ function driverFailureDetails(stderr) {
     expectedStatus: knownRoute ? Number(http[2]) : null, actualStatus: knownRoute ? Number(http[3]) : null };
 }
 
-/** Only fixed operation names, process status and driver diagnostics leave the fixture boundary. */
+function restoreFailureDetails(result) {
+  const exitStatus = Number.isInteger(result.status) && result.status >= 0 && result.status <= 255 ? result.status : null;
+  const unavailable = { stage: "operator", reason: "diagnostic-unavailable", exitStatus };
+  if (typeof result.stdout !== "string" || result.stdout.length > 16_384) return unavailable;
+  const lines = result.stdout.split("\n").filter(line => line.startsWith("{"));
+  if (lines.length !== 1) return unavailable;
+  try {
+    const report = JSON.parse(lines[0]);
+    const stages = ["configuration", "configuration-or-restore", "restore-child", "restore-report", "deadline", "download-manifest", "download-backup",
+      "verify-local-backup", "create-isolated-destinations", "restore-database", "restore-artifacts", "verify-restored-database"];
+    const reasons = ["configuration-rejected", "child-start-failed", "child-timeout", "child-output-limit", "child-signalled", "child-module-load-failed", "child-runtime-failed", "child-unhandled-rejection", "child-unhandled-error",
+      "missing-restore-report", "invalid-restore-report", "report-identity-mismatch", "restore-failed"];
+    if (report.schemaVersion !== 1 || report.kind !== "myskills-restore-failure" || !stages.includes(report.stage) || !reasons.includes(report.reason)
+      || report.exitStatus !== null && (!Number.isInteger(report.exitStatus) || report.exitStatus < 0 || report.exitStatus > 255)) return unavailable;
+    const location = report.sourceLocation;
+    const sourceLocation = ["restore-cli", "registry-backup", "registry-recovery"].includes(location?.source)
+      && Number.isInteger(location.line) && location.line >= 1 && location.line <= 10_000 ? { source: location.source, line: location.line } : null;
+    return { stage: report.stage, reason: report.reason, exitStatus: report.exitStatus,
+      ...(["child-module-load-failed", "child-runtime-failed", "child-unhandled-rejection", "child-unhandled-error"].includes(report.reason) ? { sourceLocation } : {}) };
+  } catch { return unavailable; }
+}
+
+/** Only fixed operation names, process status and bounded diagnostics leave the fixture boundary. */
 export function hostCommandFailure(command, args, result) {
   const verb = ["run", "compose", "network", "container", "build", "pull", "push", "tag", "inspect", "req", "rev-parse", "status"].includes(args[0]) ? args[0] : "command";
   const tool = command === "openssl" ? "openssl" : command === "git" ? "git" : command === "sh" ? "operator" : "docker";
@@ -350,7 +372,8 @@ export function hostCommandFailure(command, args, result) {
     exitStatus: Number.isInteger(result.status) ? result.status : null,
     signal: ["SIGTERM", "SIGKILL", "SIGINT", "SIGABRT"].includes(result.signal) ? result.signal : null,
     processErrorCode: ["ETIMEDOUT", "ENOENT", "EACCES", "EPERM", "ENOBUFS"].includes(result.error?.code) ? result.error.code : null, reason,
-    ...(tool === "docker" && verb === "run" && role === "driver" ? { driverFailure: driverFailureDetails(result.stderr) } : {}) };
+    ...(tool === "docker" && verb === "run" && role === "driver" ? { driverFailure: driverFailureDetails(result.stderr) } : {}),
+    ...(command === "sh" && args[1] === "recover" && args[2] === "execute" ? { restoreFailure: restoreFailureDetails(result) } : {}) };
 }
 
 export function assertHostCommandSucceeded(command, args, result) {

@@ -53,6 +53,14 @@ import test from "node:test";
 // - Invalid concurrency or shared port overrides silently select an unsafe execution plan.
 // - Private HOME hides Docker's implicit config, so preflight, job commands and cleanup select
 //   different contexts or daemons. Preserve the original configuration path without copying it.
+// Six-job queue failures, written before the scheduler change:
+// - Six jobs do not overlap, a seventh starts before a slot is free, or a job runs twice.
+// - Six-job execution loses private directories, port separation, cancellation or failure evidence.
+// - Six jobs are accepted for release/CodeQL or shared browser-port overrides bypass isolation.
+// Network isolation failure, written before ordering the image job:
+// - An early check completion starts image/restore Docker network changes while browsers still run.
+//   Every browser job, including its cleanup, must finish before image/restore starts; failures
+//   must not omit that required job, and cancellation must still keep it from starting.
 // Railway MCP delivery failures, written before the image gate:
 // - CI/release omit the standalone image, bypass its default command, ignore Railway's PORT,
 //   or pass despite a failed health/auth smoke. A name conflict must never remove another container.
@@ -81,7 +89,7 @@ const fixtureFiles = [
   "scripts/verify-release.mjs",
 ];
 const webBuild = "run build -w @myskills-app/core -w @myskills-app/auth -w @myskills-app/skill-package -w @myskills-app/api";
-const mockedBrowser = "run test:e2e -w @myskills-app/web -- --reporter=line,json";
+const mockedBrowser = "run test:e2e -w @myskills-app/web -- --reporter=line,json --retries=0 --max-failures=1 --workers=1";
 // The gate is defined for Linux/amd64 hosts; elsewhere a complete pinned run must stay non-gating.
 const hostBlockers = process.platform === "linux" && process.arch === "x64" ? [] : ["unsupported-host-platform"];
 const runIdReservation = join("/var/tmp/myskills-local-ci-locks", runId);
@@ -149,6 +157,9 @@ test("unsafe or stale inputs are rejected before any tool, container or workspac
     { name: "CodeQL without CLI", args: ["codeql"], reason: "codeql-cli-unavailable" },
     { name: "unsupported lane count", env: { LOCAL_CI_VERIFY_LANES: "3" }, reason: "invalid-verify-lanes" },
     { name: "parallel release", args: ["release-check"], env: { LOCAL_CI_VERIFY_LANES: "4" }, reason: "invalid-verify-lanes" },
+    { name: "six-job release", args: ["release-check"], env: { LOCAL_CI_VERIFY_LANES: "6" }, reason: "invalid-verify-lanes" },
+    { name: "six-job CodeQL", args: ["codeql"], env: { LOCAL_CI_VERIFY_LANES: "6" }, reason: "invalid-verify-lanes" },
+    { name: "shared six-job browser port", env: { LOCAL_CI_VERIFY_LANES: "6", MYSKILLS_E2E_WEB_PORT: "43100" }, reason: "parallel-port-override" },
     { name: "shared parallel browser port", env: { LOCAL_CI_VERIFY_LANES: "4", MYSKILLS_E2E_WEB_PORT: "43100" }, reason: "parallel-port-override" },
   ];
   symlinkSync(fixture.source, join(fixture.root, "source-link"));
@@ -329,7 +340,7 @@ for (const phase of ["start", "health"]) test(`MCP ${phase} smoke bounds a stall
   assert.equal(existsSync(runIdReservation), false);
 });
 
-for (const lanes of ["1", "4"]) test(`job failures are isolated and fail contexts with ${lanes} lane(s) without removing another run's container`, (t) => {
+for (const lanes of ["1", "4", "6"]) test(`job failures are isolated and fail contexts with ${lanes} lane(s) without removing another run's container`, (t) => {
   const fixture = makeFixture(t);
   const conflicting = `myskills-ci-${runId}-postgres-node22-postgres`;
   fixture.configure({
@@ -369,10 +380,11 @@ for (const lanes of ["1", "4"]) test(`job failures are isolated and fail context
   assert.equal(existsSync(fixture.runWorkspace), false);
 });
 
-test("four verify lanes overlap, preserve job order and isolate directories and browser ports", (t) => {
+for (const lanes of [4, 6]) test(`${lanes} verify lanes overlap, bound admission and isolate directories and browser ports`, (t) => {
   const fixture = makeFixture(t);
-  fixture.configure({ rules: [{ tool: "npm", prefix: "ci", sleepMs: 500 }] });
-  const run = runLocalCi(fixture, ["verify"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_VERIFY_LANES: "4" } });
+  fixture.configure({ rules: [{ tool: "npm", prefix: "ci", sleepMs: 500 },
+    { tool: "npm", prefix: "run test:e2e -w @myskills-app/web", sleepMs: 1500 }] });
+  const run = runLocalCi(fixture, ["verify"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_VERIFY_LANES: String(lanes) } });
   assert.equal(run.status, 0, run.output);
   assert.equal(run.result.complete, true);
   assert.deepEqual(run.result.contexts, { check: "passed", "web-e2e": "passed", "postgres-integration": "passed" });
@@ -380,16 +392,24 @@ test("four verify lanes overlap, preserve job order and isolate directories and 
   const times = Object.fromEntries(run.result.jobs.map((job) => [job.id, {
     start: Date.parse(job.startedAt), end: Date.parse(job.finishedAt),
   }]));
-  const first = ["web-e2e-node22", "web-e2e-node24", "postgres-node22", "postgres-node24"].map((id) => times[id]);
-  assert.ok(Math.max(...first.map(({ start }) => start)) < Math.min(...first.map(({ end }) => end)), "all four initial jobs must overlap");
-  for (const [before, after] of [["postgres-node22", "check-node22"], ["postgres-node24", "check-node24"], ["check-node24", "railway-images"]]) {
+  const firstIds = lanes === 4
+    ? ["web-e2e-node22", "web-e2e-node24", "postgres-node22", "postgres-node24"]
+    : ["check-node22", "postgres-node22", "web-e2e-node22", "check-node24", "postgres-node24", "web-e2e-node24"];
+  const first = firstIds.map((id) => times[id]);
+  assert.ok(Math.max(...first.map(({ start }) => start)) < Math.min(...first.map(({ end }) => end)), `all ${lanes} initial jobs must overlap`);
+  for (const [before, after] of lanes === 4 ? [["postgres-node22", "check-node22"], ["postgres-node24", "check-node24"], ["check-node24", "railway-images"]] : []) {
     assert.ok(times[before].end <= times[after].start, `${after} must wait for ${before}, including cleanup`);
   }
+  if (lanes === 6) assert.ok(times["railway-images"].start >= Math.min(...first.map(({ end }) => end)), "the seventh job must wait for a free slot");
+  for (const browser of ["web-e2e-node22", "web-e2e-node24"]) {
+    assert.ok(times["railway-images"].start >= times[browser].end, `image/restore network changes must wait for ${browser} cleanup`);
+  }
+  assert.equal(new Set(run.result.jobs.map(({ id }) => id)).size, 7, "each required job runs once");
   const events = Object.values(times).flatMap(({ start, end }) => [[start, 1], [end, -1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   let active = 0;
   for (const [, change] of events) {
     active += change;
-    assert.ok(active <= 4, "never run more than four jobs");
+    assert.ok(active <= lanes, `never run more than ${lanes} jobs`);
   }
   const calls = fixture.records().filter(({ cwd, args }) => cwd.endsWith("/source") && args[0] !== "--version" && cwd !== fixture.source);
   const environments = new Map(calls.map(({ cwd, env }) => [cwd, env]));
@@ -412,13 +432,13 @@ test("four verify lanes overlap, preserve job order and isolate directories and 
   assert.equal(existsSync(runIdReservation), false);
 });
 
-test("four-lane cancellation stops every active step before cleanup and skips queued jobs", async (t) => {
+for (const lanes of [4, 6]) test(`${lanes}-lane cancellation stops every active step before cleanup and skips queued jobs`, async (t) => {
   const fixture = makeFixture(t);
   fixture.configure({ rules: [{ tool: "npm", prefix: "ci", sleepMs: 60_000 }] });
   const evidence = fixture.newEvidence();
   const child = spawn("bash", [join(fixture.source, "scripts/local-ci.sh"), "verify"], {
     cwd: fixture.source,
-    env: fixture.env({ LOCAL_CI_EVIDENCE_DIR: evidence, LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_VERIFY_LANES: "4" }),
+    env: fixture.env({ LOCAL_CI_EVIDENCE_DIR: evidence, LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_VERIFY_LANES: String(lanes) }),
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";
@@ -429,7 +449,7 @@ test("four-lane cancellation stops every active step before cleanup and skips qu
   try {
     steps = await waitFor(() => {
       const installs = fixture.records().filter(({ tool, args }) => tool === "npm" && args.join(" ") === "ci");
-      return installs.length === 4 && installs;
+      return installs.length === lanes && installs;
     }, 10_000);
   } finally {
     child.kill("SIGTERM");
@@ -440,7 +460,7 @@ test("four-lane cancellation stops every active step before cleanup and skips qu
   const result = readJson(join(evidence, "result.json"));
   assert.equal(result.status, "cancelled");
   assert.deepEqual(result.contexts, { check: "cancelled", "web-e2e": "cancelled", "postgres-integration": "cancelled" });
-  for (const id of ["check-node22", "check-node24", "railway-images"]) {
+  for (const id of lanes === 4 ? ["check-node22", "check-node24", "railway-images"] : ["railway-images"]) {
     assert.equal(result.jobs.find((job) => job.id === id).status, "not-run", `${id} must never start`);
   }
   assert.equal(result.cleanup.status, "complete");
@@ -1162,8 +1182,13 @@ async function fakeToolMain() {
   function simulate() {
     if (tool === "npm") {
       if (key === "--version") return print((config.npmVersion ?? {})[line] ?? "11.12.1");
-      if (key === "run test:e2e -w @myskills-app/web -- --reporter=line,json") {
+      if (key.startsWith("run test:e2e -w @myskills-app/web -- --reporter=line,json")) {
         if (!(config.omitMockedReport ?? []).includes(line)) writeReport("apps/web/test-results/mocked-report.json");
+        if (config.failMockedBrowser === line) {
+          fs.mkdirSync("apps/web/test-results/failed-case", { recursive: true });
+          fs.writeFileSync("apps/web/test-results/failed-case/trace.zip", "synthetic diagnostic trace");
+          return 1;
+        }
         return 0;
       }
       if (key === "run test:e2e -w @myskills-app/site -- --reporter=line,json") {
@@ -1273,3 +1298,58 @@ async function fakeToolMain() {
     return inline ? inline.slice(name.length + 1) : valueAfter(name);
   }
 }
+
+// Browser-worker failures, written before adding the opt-in:
+// - An invalid worker count is ignored or reaches a workload.
+// - The override changes full-stack/site workers, leaks the shared database URL,
+//   omits a required job, or does not reach both Node browser jobs.
+test("mocked browser worker limits reject invalid values before starting tools", (t) => {
+  const fixture = makeFixture(t);
+  for (const value of ["", "0", "3", "2.0", "auto", "50%"] ) {
+    const run = runLocalCi(fixture, ["verify"], { env: { LOCAL_CI_MOCKED_BROWSER_WORKERS: value } });
+    assert.equal(run.status, 2, `${value}: ${run.output}`);
+    assert.equal(run.result.reason, "invalid-mocked-browser-workers");
+    assert.deepEqual(fixture.records(), []);
+  }
+});
+
+for (const workers of ["1", "2"]) test(`mocked browser workers ${workers} preserve the complete isolated matrix`, (t) => {
+  const fixture = makeFixture(t);
+  const run = runLocalCi(fixture, ["verify"], { env: {
+    LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_VERIFY_LANES: "6",
+    LOCAL_CI_MOCKED_BROWSER_WORKERS: workers, TEST_DATABASE_URL: "postgres://synthetic/test",
+  } });
+  assert.equal(run.status, 0, run.output);
+  assert.deepEqual(run.result.jobs.map(({ id }) => id).sort(), [...verifyJobs].sort());
+  assert.equal(run.result.cleanup.status, "complete");
+  const calls = fixture.records().filter(({ tool }) => tool === "npm");
+  for (const line of ["22", "24"]) {
+    const mocked = calls.find((call) => call.line === line && call.args.join(" ").startsWith("run test:e2e -w @myskills-app/web"));
+    assert.equal(mocked.args.at(-1), `--workers=${workers}`);
+    assert.ok(mocked.args.includes("--retries=0"));
+    assert.ok(mocked.args.includes("--max-failures=1"));
+    assert.equal(mocked.env.TEST_DATABASE_URL, undefined);
+    assert.equal(run.result.jobs.find(({ id }) => id === `web-e2e-node${line}`).mockedBrowserWorkers, Number(workers));
+    assert.ok(calls.some((call) => call.line === line && call.args.join(" ") === "run test:e2e:fullstack"));
+    assert.ok(calls.some((call) => call.line === line && call.args.join(" ") === "run test:e2e -w @myskills-app/site -- --reporter=line,json"));
+  }
+});
+
+// Failure modes established before implementation: raw authentication traces enter exported
+// evidence, source cleanup deletes private diagnostics, or retained data is readable by other users.
+test("failed mocked browser keeps raw diagnostics private outside exported evidence", (t) => {
+  const fixture = makeFixture(t);
+  fixture.configure({ failMockedBrowser: "22" });
+  const run = runLocalCi(fixture, ["verify", "--job", "web-e2e-node22"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha } });
+  assert.equal(run.status, 1, run.output);
+  assert.equal(run.result.jobs[0].status, "failed");
+  assert.equal(existsSync(join(run.evidence, "browser-diagnostics")), false);
+  const [privateName] = readdirSync(dirname(run.evidence)).filter((name) => name.startsWith(`.private-browser-diagnostics-${run.result.runId}-web-e2e-node22-`));
+  assert.ok(privateName, "private diagnostics must survive source cleanup");
+  const retained = join(dirname(run.evidence), privateName);
+  assert.equal(lstatSync(retained).mode & 0o777, 0o700);
+  assert.equal(readFileSync(join(retained, "failed-case", "trace.zip"), "utf8"), "synthetic diagnostic trace");
+  assert.equal(JSON.parse(readFileSync(join(retained, "mocked-report.json"), "utf8")).suites.length, 1);
+  assert.equal(existsSync(fixture.runWorkspace), false);
+  assert.equal(run.result.cleanup.status, "complete");
+});

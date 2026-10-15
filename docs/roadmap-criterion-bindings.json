@@ -1762,8 +1762,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -1775,7 +1775,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -1792,8 +1792,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 341,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "line": 363,
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -1806,8 +1806,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 106,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 107,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"startup waits for storage and migration; bootstrap is a separate fresh-only command\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -1822,8 +1822,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -1849,8 +1849,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -1862,7 +1862,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -1879,8 +1879,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 341,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "line": 363,
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -1893,8 +1893,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 132,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 133,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"unquoted Compose dollar expressions fail before upgrade writer quiescence; quoted values remain literal\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -1909,8 +1909,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 326,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 358,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -2196,8 +2196,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -2209,7 +2209,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -2226,8 +2226,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 341,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "line": 363,
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -2240,8 +2240,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 116,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 117,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"public bootstrap rejects unsafe protected files before any bootstrap container consumes them\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -2256,8 +2256,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 326,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 358,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -2340,8 +2340,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         }
       ],
@@ -5361,8 +5361,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -5373,8 +5373,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         },
         {
@@ -5391,8 +5391,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 341,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "line": 363,
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -5405,8 +5405,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 300,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 301,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"recovery plan stays read-only and execute is explicit Linux-only guarded restore\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -5421,8 +5421,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -8267,8 +8267,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -8280,7 +8280,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -8297,8 +8297,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 341,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "line": 363,
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -8311,8 +8311,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 38,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 39,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"bundle integrity and digest metadata fail before Docker\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8327,8 +8327,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 326,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 358,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -8490,8 +8490,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 89,
-          "sha256": "849289e91e3b5975f1253488b857139029311899d22a35830bdbc516222af860",
+          "line": 97,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"HOST rehearsal remains inside railway-images and fails that canonical job when its subprocess fails\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8535,8 +8535,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 559,
-          "sha256": "849289e91e3b5975f1253488b857139029311899d22a35830bdbc516222af860",
+          "line": 579,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8812,8 +8812,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -8825,7 +8825,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -8842,8 +8842,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 341,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "line": 363,
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -8856,8 +8856,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 132,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 133,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"unquoted Compose dollar expressions fail before upgrade writer quiescence; quoted values remain literal\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8872,8 +8872,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 326,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 358,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup readback rejects each container identity, attachment and published-port failure safely\", async t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -9103,8 +9103,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 588,
-          "sha256": "849289e91e3b5975f1253488b857139029311899d22a35830bdbc516222af860",
+          "line": 608,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9296,8 +9296,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 284,
-          "sha256": "849289e91e3b5975f1253488b857139029311899d22a35830bdbc516222af860",
+          "line": 295,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "for (const readback of [\"owned\", \"foreign\", \"unavailable\", \"absent\", \"malformed\"]) test(`cancelled MCP creation reconciles ${readback} ownership before cleanup`, async (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9341,8 +9341,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 559,
-          "sha256": "849289e91e3b5975f1253488b857139029311899d22a35830bdbc516222af860",
+          "line": 579,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9701,8 +9701,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         }
       ],
@@ -9762,8 +9762,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 588,
-          "sha256": "849289e91e3b5975f1253488b857139029311899d22a35830bdbc516222af860",
+          "line": 608,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9779,8 +9779,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -9791,8 +9791,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         },
         {
@@ -9810,7 +9810,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 149,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "reserve(\"network\", network);"
         },
         {
@@ -9823,8 +9823,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 106,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 107,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"startup waits for storage and migration; bootstrap is a separate fresh-only command\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9839,8 +9839,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -9926,8 +9926,8 @@
         },
         {
           "path": "scripts/local-ci.mjs",
-          "line": 676,
-          "sha256": "3d08649558db98f1a053815a8ae3e171149e4b1ec9a836daedfee720daaa56ca",
+          "line": 702,
+          "sha256": "7b5f63f92be2e17a2e7c4a0712dc726d67ce2c06968eaa1f1b5123b79dc21e5f",
           "anchor": "async smokeMcp(image) {"
         }
       ],
@@ -9988,7 +9988,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         }
       ],
@@ -10057,8 +10057,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -10069,8 +10069,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         },
         {
@@ -10088,7 +10088,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 145,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService, publicationObserver }) {"
         },
         {
@@ -10101,8 +10101,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 169,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 170,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"upgrade requires forward consent, pulls before quiescence, backs up before migration and retains failure receipt\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -10117,8 +10117,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11589,8 +11589,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 270,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 325,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "validateBootstrap(bootstrap);"
         },
         {
@@ -11602,7 +11602,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -11619,8 +11619,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 341,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "line": 363,
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -11633,8 +11633,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 106,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 107,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"startup waits for storage and migration; bootstrap is a separate fresh-only command\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11649,8 +11649,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11676,8 +11676,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -11689,7 +11689,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -11706,8 +11706,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 341,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "line": 363,
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -11720,8 +11720,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 38,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 39,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"bundle integrity and digest metadata fail before Docker\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11736,8 +11736,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11763,8 +11763,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -11776,7 +11776,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -11794,7 +11794,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 190,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "chmodSync(join(certs, \"private.key\"), 0o600);"
         },
         {
@@ -11807,8 +11807,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 270,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 271,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"partial setup preserves existing protected files and cleans its operation lock\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11823,8 +11823,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 115,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 147,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup launch rejection retains the uncertain owned create and exports only bounded operation diagnostics\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11850,8 +11850,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 41,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 96,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "validateRuntime(runtime); const state = readJson(join(configDir, \"state.json\"), true);"
         },
         {
@@ -11862,8 +11862,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         },
         {
@@ -11881,7 +11881,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 187,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "call(\"openssl\", [\"req\", \"-x509\", \"-newkey\", \"rsa:2048\", \"-nodes\", \"-days\", \"1\", \"-keyout\", join(certs, \"private.key\"),"
         },
         {
@@ -11894,8 +11894,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 300,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 301,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"recovery plan stays read-only and execute is explicit Linux-only guarded restore\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11910,8 +11910,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -11937,8 +11937,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 41,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 96,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "validateRuntime(runtime); const state = readJson(join(configDir, \"state.json\"), true);"
         },
         {
@@ -11949,8 +11949,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         },
         {
@@ -11968,7 +11968,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 190,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "chmodSync(join(certs, \"private.key\"), 0o600);"
         },
         {
@@ -11981,8 +11981,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 270,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 271,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"partial setup preserves existing protected files and cleans its operation lock\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11997,8 +11997,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -12024,8 +12024,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -12036,8 +12036,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         },
         {
@@ -12055,7 +12055,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 145,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function prepareHostBackupService({ proof, owner, image, user, password, reserve, mark, docker, call, runService, publicationObserver }) {"
         },
         {
@@ -12068,8 +12068,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 309,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 310,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"recovery executes exactly the quoted values validated by preflight using explicit host networking\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -12084,8 +12084,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -12111,8 +12111,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -12124,7 +12124,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -12142,7 +12142,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 187,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "call(\"openssl\", [\"req\", \"-x509\", \"-newkey\", \"rsa:2048\", \"-nodes\", \"-days\", \"1\", \"-keyout\", join(certs, \"private.key\"),"
         },
         {
@@ -12155,8 +12155,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 56,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 57,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"checksum-valid evidence with wrong image or source identity is refused\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -12171,8 +12171,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -13319,8 +13319,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -13331,8 +13331,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         },
         {
@@ -13349,8 +13349,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 341,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "line": 363,
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -13363,8 +13363,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 95,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 96,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"fixed web route, SMTPS and optional HTTP MCP match the shipped ingress contracts\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -13379,8 +13379,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -13729,8 +13729,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 588,
-          "sha256": "849289e91e3b5975f1253488b857139029311899d22a35830bdbc516222af860",
+          "line": 608,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -13758,8 +13758,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         }
       ],
@@ -14797,7 +14797,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         }
       ],
@@ -14841,8 +14841,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         }
       ],
@@ -14939,8 +14939,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 588,
-          "sha256": "849289e91e3b5975f1253488b857139029311899d22a35830bdbc516222af860",
+          "line": 608,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14984,8 +14984,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 559,
-          "sha256": "849289e91e3b5975f1253488b857139029311899d22a35830bdbc516222af860",
+          "line": 579,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15001,8 +15001,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -15014,7 +15014,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -15031,8 +15031,8 @@
         },
         {
           "path": "scripts/lib/host-backup-service.mjs",
-          "line": 341,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "line": 363,
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "export function hostCommandFailure(command, args, result) {"
         },
         {
@@ -15045,8 +15045,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 132,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 133,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"unquoted Compose dollar expressions fail before upgrade writer quiescence; quoted values remain literal\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15061,8 +15061,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -15302,8 +15302,8 @@
       "sources": [
         {
           "path": "deploy/self-host/configure.mjs",
-          "line": 38,
-          "sha256": "f96e41053089e702335d03179a7c513eb0eab98b90fe4835ef5aef7519dfc3c7",
+          "line": 93,
+          "sha256": "fd76b608a70fd20f0def62df3741e47b1d5dd6c9178bd74897b55cea00f778f8",
           "anchor": "protectedDirectory(configDir);"
         },
         {
@@ -15314,8 +15314,8 @@
         },
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
-          "line": 40,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "line": 46,
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "## Canonical Rehearsal And Evidence"
         },
         {
@@ -15333,7 +15333,7 @@
         {
           "path": "scripts/lib/host-backup-service.mjs",
           "line": 149,
-          "sha256": "33a3b25981eeb34513e852a2891834d0f394289d63d290ce0d5748acef62e2b2",
+          "sha256": "7369aad6e84ac0b87bc5118afc314f69790f0df8fc9cc174204369e55313e4c6",
           "anchor": "reserve(\"network\", network);"
         },
         {
@@ -15346,8 +15346,8 @@
       "checks": [
         {
           "path": "scripts/test/self-host-operator.test.mjs",
-          "line": 106,
-          "sha256": "9590670c380993c5c3cfdaf0699920b8729ea4e7a8de03e75abd5fe8574621ab",
+          "line": 107,
+          "sha256": "3e392f72cf21177eca7d2cc5a34a56a1444432e611f0d6280446e97d5702e0d6",
           "anchor": "test(\"startup waits for storage and migration; bootstrap is a separate fresh-only command\", (t) => {",
           "command": "node --test scripts/test/self-host-operator.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15362,8 +15362,8 @@
         },
         {
           "path": "scripts/test/host-backup-service.test.mjs",
-          "line": 88,
-          "sha256": "cbf50c27c26e945557793e5bee2b5a07a6c55f23643a53baee7be42b91b59af6",
+          "line": 120,
+          "sha256": "42fd4910b163bc5e169efb65550ecade1a8a55641337b3cc85bcccd9e8ff911f",
           "anchor": "test(\"backup setup reserves ownership and separates loopback publication from direct container TLS without static IP\", t => {",
           "command": "node --test scripts/test/host-backup-service.test.mjs",
           "execution": "local_node22_working_source_pass",
@@ -15450,7 +15450,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         },
         {
@@ -15516,8 +15516,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 588,
-          "sha256": "849289e91e3b5975f1253488b857139029311899d22a35830bdbc516222af860",
+          "line": 608,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -19219,7 +19219,7 @@
         {
           "path": "docs/SELF_HOST_OPERATOR.md",
           "line": 1,
-          "sha256": "c955495c7347a15405714839031c711e37a35989024e37eacb628049b1e169f6",
+          "sha256": "2c6fdba04995bd63f40b473d39e8e089e2c0771766dd0b81866360c85293fff2",
           "anchor": "# Self-Host Operator Package"
         }
       ],

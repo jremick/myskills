@@ -203,11 +203,15 @@ function validateEvidenceDirectory(value) {
 }
 
 function prepareRun(options, runId, evidence) {
-  const laneCount = process.env.LOCAL_CI_VERIFY_LANES ?? "1";
-  if (!["1", "4"].includes(laneCount) || (laneCount === "4" && options.mode !== "verify")) {
-    throw new Rejection("invalid-verify-lanes", "LOCAL_CI_VERIFY_LANES must be 1 (serial) or 4 (verify only).");
+  const mockedBrowserWorkers = process.env.LOCAL_CI_MOCKED_BROWSER_WORKERS ?? "1";
+  if (!["1", "2"].includes(mockedBrowserWorkers) || (mockedBrowserWorkers !== "1" && options.mode !== "verify")) {
+    throw new Rejection("invalid-mocked-browser-workers", "LOCAL_CI_MOCKED_BROWSER_WORKERS must be 1 (default) or 2 (verify only).");
   }
-  if (laneCount === "4" && options.jobs.filter((id) => id.startsWith("web-e2e-")).length > 1
+  const laneCount = process.env.LOCAL_CI_VERIFY_LANES ?? "1";
+  if (!["1", "4", "6"].includes(laneCount) || (laneCount !== "1" && options.mode !== "verify")) {
+    throw new Rejection("invalid-verify-lanes", "LOCAL_CI_VERIFY_LANES must be 1 (serial), 4 or 6 (verify only).");
+  }
+  if (laneCount !== "1" && options.jobs.filter((id) => id.startsWith("web-e2e-")).length > 1
     && browserPortNames.some((name) => process.env[name] !== undefined)) {
     throw new Rejection("parallel-port-override", "Parallel browser jobs need automatic distinct ports; unset MYSKILLS_E2E_PORT, MYSKILLS_E2E_WEB_PORT, MYSKILLS_E2E_MAILPIT_PORT and MYSKILLS_SITE_TEST_PORT.");
   }
@@ -240,6 +244,7 @@ function prepareRun(options, runId, evidence) {
     rootPackage,
     npmVersion,
     laneCount: Number(laneCount),
+    mockedBrowserWorkers: Number(mockedBrowserWorkers),
     browserPorts: new Set(),
     gatingBlockers: [
       ...(options.complete ? [] : ["partial-job-selection"]),
@@ -382,19 +387,29 @@ async function executeRun(run, base) {
   const failureReasons = [];
   const sinks = [];
   console.log(`[local-ci] ${run.mode} ${run.runId}: ${run.jobs.join(", ")}`);
-  const lanes = run.laneCount === 4 ? verifyLanes.map((lane) => lane.filter((id) => run.jobs.includes(id))) : [run.jobs];
+  // Image/restore changes Docker networks. Keep those changes after browser cleanup
+  // so Chromium cannot lose local requests with ERR_NETWORK_CHANGED.
+  const queue = run.jobs.filter((id) => id !== "railway-images");
+  const lanes = run.laneCount === 6
+    ? Array.from({ length: Math.min(6, queue.length) }, () => queue)
+    : run.laneCount === 4 ? verifyLanes.map((lane) => lane.filter((id) => queue.includes(id))) : [queue];
+  const executeJob = async (id) => {
+    if (state.cancelled) {
+      results.set(id, { id, status: "not-run", reason: "cancelled", steps: [] });
+    } else {
+      const job = new JobContext(id, run, ledger, environment);
+      sinks.push({ id, sink: job.sink });
+      results.set(id, await job.execute());
+    }
+  };
   // Wait for every lane even on an internal error. Cleanup must never race a still-running job.
   const outcomes = await Promise.allSettled(lanes.map(async (lane) => {
-    for (const id of lane) {
-      if (state.cancelled) {
-        results.set(id, { id, status: "not-run", reason: "cancelled", steps: [] });
-      } else {
-        const job = new JobContext(id, run, ledger, environment);
-        sinks.push({ id, sink: job.sink });
-        results.set(id, await job.execute());
-      }
+    // Taking the next job is synchronous; each queue item belongs to one lane.
+    for (let id = lane.shift(); id !== undefined; id = lane.shift()) {
+      await executeJob(id);
     }
   }));
+  if (run.jobs.includes("railway-images")) outcomes.push(...await Promise.allSettled([executeJob("railway-images")]));
   for (const outcome of outcomes) {
     if (outcome.status === "rejected") failureReasons.push(`internal-error: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`);
   }
@@ -479,7 +494,7 @@ class JobContext {
     this.deadline = id.startsWith("web-e2e-") ? Date.now() + webE2eTimeoutMs : null;
     this.details = {};
     this.privateEnvironment = {};
-    if (run.laneCount === 4) {
+    if (run.laneCount > 1) {
       // Keep TMPDIR short enough for the Unix sockets used by test tooling. The controller supplies
       // its own short run TMPDIR; every job gets an exclusively created child recorded for cleanup.
       const directory = mkdtempSync(join(tmpdir(), "msci-"));
@@ -515,6 +530,17 @@ class JobContext {
       this.fail("internal-error");
     }
     if (this.clone) {
+      // Raw authentication traces stay private on the worker, outside exported evidence.
+      const diagnostics = join(this.clone, "apps/web/test-results");
+      if (this.id.startsWith("web-e2e-") && (this.reason || this.timedOut || this.stopped) && existsSync(diagnostics)) {
+        try {
+          const retained = mkdtempSync(join(dirname(this.run.evidence), `.private-browser-diagnostics-${this.run.runId}-${this.id}-`));
+          copyRegularFiles(diagnostics, retained);
+        } catch (error) {
+          this.sink.note(`failure diagnostics could not be retained: ${error.code ?? error.message}`);
+          this.fail("diagnostic-retention-failed");
+        }
+      }
       try {
         rmSync(dirname(this.clone), { recursive: true, force: true });
       } catch (error) {
@@ -756,10 +782,11 @@ const jobRunners = {
     if (!job.useToolchain(line) || !await job.checkout()) return;
     const ports = await e2ePorts(job.run);
     job.details.ports = ports;
+    job.details.mockedBrowserWorkers = job.run.mockedBrowserWorkers;
     await job.step("install", "npm", ["ci"]);
     await job.step("playwright-browser", "npx", ["playwright", "install", "chromium"]);
     await job.step("build", "npm", ["run", "build", "-w", "@myskills-app/core", "-w", "@myskills-app/auth", "-w", "@myskills-app/skill-package", "-w", "@myskills-app/api"]);
-    await job.step("mocked-browser", "npm", ["run", "test:e2e", "-w", "@myskills-app/web", "--", "--reporter=line,json"], {
+    await job.step("mocked-browser", "npm", ["run", "test:e2e", "-w", "@myskills-app/web", "--", "--reporter=line,json", "--retries=0", "--max-failures=1", `--workers=${job.run.mockedBrowserWorkers}`], {
       extraEnv: { ...ports, PLAYWRIGHT_JSON_OUTPUT_FILE: "test-results/mocked-report.json" },
     });
     await collectBrowserEvidence(job, "mocked-browser", "collect-mocked-evidence", "mocked-report.json", "mocked");
@@ -1292,7 +1319,7 @@ async function e2ePorts(run) {
       : ["MYSKILLS_E2E_WEB_PORT", "MYSKILLS_E2E_MAILPIT_PORT"].includes(name) ? "0" : String(await freeLoopbackPort());
     // Full-stack Docker ports stay daemon-owned from bind through teardown.
     if (port === "0") { ports[name] = port; continue; }
-    if (run.laneCount === 4) {
+    if (run.laneCount > 1) {
       while (run.browserPorts.has(port)) port = String(await freeLoopbackPort());
       run.browserPorts.add(port);
     }

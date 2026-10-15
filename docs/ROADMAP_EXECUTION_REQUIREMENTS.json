@@ -2910,7 +2910,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -2930,7 +2930,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 341
+            "line": 363
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -2940,7 +2940,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 106,
+            "line": 107,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -2952,7 +2952,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3011,7 +3011,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -3031,7 +3031,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 341
+            "line": 363
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -3041,7 +3041,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 132,
+            "line": 133,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -3053,7 +3053,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 326,
+            "line": 358,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3583,7 +3583,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -3603,7 +3603,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 341
+            "line": 363
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -3613,7 +3613,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 116,
+            "line": 117,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -3625,7 +3625,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 326,
+            "line": 358,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -3777,7 +3777,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           }
         ],
         "checks": [
@@ -8537,7 +8537,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -8545,7 +8545,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           },
           {
             "path": "docker-compose.yml",
@@ -8557,7 +8557,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 341
+            "line": 363
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -8567,7 +8567,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 300,
+            "line": 301,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -8579,7 +8579,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -13040,7 +13040,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -13060,7 +13060,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 341
+            "line": 363
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -13070,7 +13070,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 38,
+            "line": 39,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -13082,7 +13082,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 326,
+            "line": 358,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -13317,7 +13317,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 89,
+            "line": 97,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -13390,7 +13390,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 559,
+            "line": 579,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -13922,7 +13922,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -13942,7 +13942,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 341
+            "line": 363
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -13952,7 +13952,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 132,
+            "line": 133,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -13964,7 +13964,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 326,
+            "line": 358,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -14364,7 +14364,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 588,
+            "line": 608,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -14738,7 +14738,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 284,
+            "line": 295,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -14818,7 +14818,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 559,
+            "line": 579,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -15396,7 +15396,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           }
         ],
         "checks": [
@@ -15481,7 +15481,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 588,
+            "line": 608,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -15555,7 +15555,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -15563,7 +15563,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           },
           {
             "path": "docker-compose.yml",
@@ -15585,7 +15585,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 106,
+            "line": 107,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -15597,7 +15597,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -15761,7 +15761,7 @@
           },
           {
             "path": "scripts/local-ci.mjs",
-            "line": 676
+            "line": 702
           }
         ],
         "checks": [
@@ -15995,7 +15995,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -16003,7 +16003,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           },
           {
             "path": "docker-compose.yml",
@@ -16025,7 +16025,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 169,
+            "line": 170,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -16037,7 +16037,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18511,7 +18511,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 270
+            "line": 325
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -18531,7 +18531,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 341
+            "line": 363
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18541,7 +18541,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 106,
+            "line": 107,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -18553,7 +18553,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18624,7 +18624,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -18644,7 +18644,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 341
+            "line": 363
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -18654,7 +18654,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 38,
+            "line": 39,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -18666,7 +18666,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18737,7 +18737,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -18767,7 +18767,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 270,
+            "line": 271,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -18779,7 +18779,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 115,
+            "line": 147,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18850,7 +18850,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 41
+            "line": 96
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -18858,7 +18858,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           },
           {
             "path": "docker-compose.yml",
@@ -18880,7 +18880,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 300,
+            "line": 301,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -18892,7 +18892,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -18963,7 +18963,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 41
+            "line": 96
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -18971,7 +18971,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           },
           {
             "path": "docker-compose.yml",
@@ -18993,7 +18993,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 270,
+            "line": 271,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -19005,7 +19005,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -19076,7 +19076,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -19084,7 +19084,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           },
           {
             "path": "docker-compose.yml",
@@ -19106,7 +19106,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 309,
+            "line": 310,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -19118,7 +19118,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -19189,7 +19189,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -19219,7 +19219,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 56,
+            "line": 57,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -19231,7 +19231,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -20847,7 +20847,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -20855,7 +20855,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           },
           {
             "path": "docker-compose.yml",
@@ -20867,7 +20867,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 341
+            "line": 363
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -20877,7 +20877,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 95,
+            "line": 96,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -20889,7 +20889,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -21420,7 +21420,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 588,
+            "line": 608,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -21479,7 +21479,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           }
         ],
         "checks": [
@@ -23156,7 +23156,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           }
         ],
         "checks": [
@@ -23316,7 +23316,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 588,
+            "line": 608,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -23389,7 +23389,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 559,
+            "line": 579,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -23452,7 +23452,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -23472,7 +23472,7 @@
           },
           {
             "path": "scripts/lib/host-backup-service.mjs",
-            "line": 341
+            "line": 363
           },
           {
             "path": "scripts/lib/host-platform-receipt.mjs",
@@ -23482,7 +23482,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 132,
+            "line": 133,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -23494,7 +23494,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -23906,7 +23906,7 @@
         "sources": [
           {
             "path": "deploy/self-host/configure.mjs",
-            "line": 38
+            "line": 93
           },
           {
             "path": "deploy/self-host/myskills.sh",
@@ -23914,7 +23914,7 @@
           },
           {
             "path": "docs/SELF_HOST_OPERATOR.md",
-            "line": 40
+            "line": 46
           },
           {
             "path": "docker-compose.yml",
@@ -23936,7 +23936,7 @@
         "checks": [
           {
             "path": "scripts/test/self-host-operator.test.mjs",
-            "line": 106,
+            "line": 107,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/self-host-operator.test.mjs"
           },
@@ -23948,7 +23948,7 @@
           },
           {
             "path": "scripts/test/host-backup-service.test.mjs",
-            "line": 88,
+            "line": 120,
             "execution": "local_node22_working_source_pass",
             "command": "node --test scripts/test/host-backup-service.test.mjs",
             "receipt": "final-host-correction-current.tap (3 owned gateway/port/TLS/denial contracts passed)"
@@ -24212,7 +24212,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 588,
+            "line": 608,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
