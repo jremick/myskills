@@ -39,7 +39,7 @@ LOCAL_CI_VERIFY_LANES=4 scripts/local-ci.sh verify
 ```
 
 The default is serial. The four lanes are browser Node 22; browser Node 24; PostgreSQL then check
-Node 22; and PostgreSQL then check Node 24 then Railway images. Each lane waits for its current
+Node 22; and PostgreSQL then check Node 24. Each lane waits for its current
 job's cleanup before starting the next job. A job failure does not suppress the other required
 jobs. Cancellation stops all active steps and skips queued jobs. Release checks and CodeQL stay
 serial. Parallel execution does not change the seven-job gate, source checks or result contract.
@@ -47,6 +47,12 @@ serial. Parallel execution does not change the seven-job gate, source checks or 
 Set `LOCAL_CI_VERIFY_LANES=6` to use a shared queue with at most six active jobs. Jobs follow the
 canonical verification order; a free lane takes the next queued job only after its current job
 finishes cleanup. This mode requires a separate capacity comparison on the intended worker.
+
+In every mode, the image/restore job starts after the other selected verification jobs finish
+cleanup. Its Docker network changes must not overlap browser requests: that overlap can cause
+Chromium `ERR_NETWORK_CHANGED` failures even for loopback pages. The image job still runs after
+another job fails, and cancellation prevents it from starting. This ordering keeps all seven
+required jobs and leaves the configured lane and browser-worker counts unchanged.
 
 For a bounded `verify` comparison, set `LOCAL_CI_MOCKED_BROWSER_WORKERS=2` to run the web
 mocked-browser suite with two file-level Playwright workers on each Node version. The default

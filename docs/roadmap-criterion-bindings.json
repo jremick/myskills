@@ -8490,8 +8490,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 93,
-          "sha256": "2e1bcc041db05494ba518598355b420c7cbdf9575c71637beb91cbc7cba9ff99",
+          "line": 97,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"HOST rehearsal remains inside railway-images and fails that canonical job when its subprocess fails\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8535,8 +8535,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 571,
-          "sha256": "2e1bcc041db05494ba518598355b420c7cbdf9575c71637beb91cbc7cba9ff99",
+          "line": 579,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9103,8 +9103,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 600,
-          "sha256": "2e1bcc041db05494ba518598355b420c7cbdf9575c71637beb91cbc7cba9ff99",
+          "line": 608,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9296,8 +9296,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 291,
-          "sha256": "2e1bcc041db05494ba518598355b420c7cbdf9575c71637beb91cbc7cba9ff99",
+          "line": 295,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "for (const readback of [\"owned\", \"foreign\", \"unavailable\", \"absent\", \"malformed\"]) test(`cancelled MCP creation reconciles ${readback} ownership before cleanup`, async (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9341,8 +9341,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 571,
-          "sha256": "2e1bcc041db05494ba518598355b420c7cbdf9575c71637beb91cbc7cba9ff99",
+          "line": 579,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9762,8 +9762,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 600,
-          "sha256": "2e1bcc041db05494ba518598355b420c7cbdf9575c71637beb91cbc7cba9ff99",
+          "line": 608,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9926,8 +9926,8 @@
         },
         {
           "path": "scripts/local-ci.mjs",
-          "line": 695,
-          "sha256": "94ee175bbc980479dab703bfc2996c9dc2e54496a032fc944e0a5fab19aec9df",
+          "line": 702,
+          "sha256": "7b5f63f92be2e17a2e7c4a0712dc726d67ce2c06968eaa1f1b5123b79dc21e5f",
           "anchor": "async smokeMcp(image) {"
         }
       ],
@@ -13729,8 +13729,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 600,
-          "sha256": "2e1bcc041db05494ba518598355b420c7cbdf9575c71637beb91cbc7cba9ff99",
+          "line": 608,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14939,8 +14939,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 600,
-          "sha256": "2e1bcc041db05494ba518598355b420c7cbdf9575c71637beb91cbc7cba9ff99",
+          "line": 608,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14984,8 +14984,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 571,
-          "sha256": "2e1bcc041db05494ba518598355b420c7cbdf9575c71637beb91cbc7cba9ff99",
+          "line": 579,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check rejects wrong tags, moved tags and commits outside main before any work\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15516,8 +15516,8 @@
         },
         {
           "path": "scripts/test/local-ci.test.mjs",
-          "line": 600,
-          "sha256": "2e1bcc041db05494ba518598355b420c7cbdf9575c71637beb91cbc7cba9ff99",
+          "line": 608,
+          "sha256": "c5653d1ffdc942bad6d1b7c0fb22bfbd69cbc2ceac5360a121f8c03b52268fb1",
           "anchor": "test(\"release-check verifies tagged artifacts and release images without publishing\", (t) => {",
           "command": "node --test scripts/test/local-ci.test.mjs",
           "execution": "prepared_not_run_on_final_commit"

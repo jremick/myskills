@@ -13317,7 +13317,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 93,
+            "line": 97,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -13390,7 +13390,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 571,
+            "line": 579,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -14364,7 +14364,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 600,
+            "line": 608,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -14738,7 +14738,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 291,
+            "line": 295,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -14818,7 +14818,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 571,
+            "line": 579,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -15481,7 +15481,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 600,
+            "line": 608,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -15761,7 +15761,7 @@
           },
           {
             "path": "scripts/local-ci.mjs",
-            "line": 695
+            "line": 702
           }
         ],
         "checks": [
@@ -21420,7 +21420,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 600,
+            "line": 608,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -23316,7 +23316,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 600,
+            "line": 608,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -23389,7 +23389,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 571,
+            "line": 579,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }
@@ -24212,7 +24212,7 @@
           },
           {
             "path": "scripts/test/local-ci.test.mjs",
-            "line": 600,
+            "line": 608,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node --test scripts/test/local-ci.test.mjs"
           }

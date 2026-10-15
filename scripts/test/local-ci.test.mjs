@@ -57,6 +57,10 @@ import test from "node:test";
 // - Six jobs do not overlap, a seventh starts before a slot is free, or a job runs twice.
 // - Six-job execution loses private directories, port separation, cancellation or failure evidence.
 // - Six jobs are accepted for release/CodeQL or shared browser-port overrides bypass isolation.
+// Network isolation failure, written before ordering the image job:
+// - An early check completion starts image/restore Docker network changes while browsers still run.
+//   Every browser job, including its cleanup, must finish before image/restore starts; failures
+//   must not omit that required job, and cancellation must still keep it from starting.
 // Railway MCP delivery failures, written before the image gate:
 // - CI/release omit the standalone image, bypass its default command, ignore Railway's PORT,
 //   or pass despite a failed health/auth smoke. A name conflict must never remove another container.
@@ -378,7 +382,8 @@ for (const lanes of ["1", "4", "6"]) test(`job failures are isolated and fail co
 
 for (const lanes of [4, 6]) test(`${lanes} verify lanes overlap, bound admission and isolate directories and browser ports`, (t) => {
   const fixture = makeFixture(t);
-  fixture.configure({ rules: [{ tool: "npm", prefix: "ci", sleepMs: 500 }] });
+  fixture.configure({ rules: [{ tool: "npm", prefix: "ci", sleepMs: 500 },
+    { tool: "npm", prefix: "run test:e2e -w @myskills-app/web", sleepMs: 1500 }] });
   const run = runLocalCi(fixture, ["verify"], { env: { LOCAL_CI_SOURCE_SHA: fixture.sha, LOCAL_CI_VERIFY_LANES: String(lanes) } });
   assert.equal(run.status, 0, run.output);
   assert.equal(run.result.complete, true);
@@ -396,6 +401,9 @@ for (const lanes of [4, 6]) test(`${lanes} verify lanes overlap, bound admission
     assert.ok(times[before].end <= times[after].start, `${after} must wait for ${before}, including cleanup`);
   }
   if (lanes === 6) assert.ok(times["railway-images"].start >= Math.min(...first.map(({ end }) => end)), "the seventh job must wait for a free slot");
+  for (const browser of ["web-e2e-node22", "web-e2e-node24"]) {
+    assert.ok(times["railway-images"].start >= times[browser].end, `image/restore network changes must wait for ${browser} cleanup`);
+  }
   assert.equal(new Set(run.result.jobs.map(({ id }) => id)).size, 7, "each required job runs once");
   const events = Object.values(times).flatMap(({ start, end }) => [[start, 1], [end, -1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   let active = 0;

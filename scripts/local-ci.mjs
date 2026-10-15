@@ -387,23 +387,29 @@ async function executeRun(run, base) {
   const failureReasons = [];
   const sinks = [];
   console.log(`[local-ci] ${run.mode} ${run.runId}: ${run.jobs.join(", ")}`);
-  const queue = [...run.jobs];
+  // Image/restore changes Docker networks. Keep those changes after browser cleanup
+  // so Chromium cannot lose local requests with ERR_NETWORK_CHANGED.
+  const queue = run.jobs.filter((id) => id !== "railway-images");
   const lanes = run.laneCount === 6
     ? Array.from({ length: Math.min(6, queue.length) }, () => queue)
-    : run.laneCount === 4 ? verifyLanes.map((lane) => lane.filter((id) => run.jobs.includes(id))) : [queue];
+    : run.laneCount === 4 ? verifyLanes.map((lane) => lane.filter((id) => queue.includes(id))) : [queue];
+  const executeJob = async (id) => {
+    if (state.cancelled) {
+      results.set(id, { id, status: "not-run", reason: "cancelled", steps: [] });
+    } else {
+      const job = new JobContext(id, run, ledger, environment);
+      sinks.push({ id, sink: job.sink });
+      results.set(id, await job.execute());
+    }
+  };
   // Wait for every lane even on an internal error. Cleanup must never race a still-running job.
   const outcomes = await Promise.allSettled(lanes.map(async (lane) => {
     // Taking the next job is synchronous; each queue item belongs to one lane.
     for (let id = lane.shift(); id !== undefined; id = lane.shift()) {
-      if (state.cancelled) {
-        results.set(id, { id, status: "not-run", reason: "cancelled", steps: [] });
-      } else {
-        const job = new JobContext(id, run, ledger, environment);
-        sinks.push({ id, sink: job.sink });
-        results.set(id, await job.execute());
-      }
+      await executeJob(id);
     }
   }));
+  if (run.jobs.includes("railway-images")) outcomes.push(...await Promise.allSettled([executeJob("railway-images")]));
   for (const outcome of outcomes) {
     if (outcome.status === "rejected") failureReasons.push(`internal-error: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`);
   }
