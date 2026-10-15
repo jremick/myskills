@@ -362,7 +362,7 @@ export function writeDeviceDraft(draft: DeviceDraft): void {
   try {
     store.setItem(DEVICE_DRAFT_KEY, draft.kind === "return" ? "1" : JSON.stringify({ kind: draft.kind, userCode: draft.userCode }));
   } catch {
-    // Private browsing can disable storage.
+    return;
   }
 }
 
@@ -370,7 +370,7 @@ export function clearDeviceDraft(): void {
   try {
     draftStorage()?.removeItem(DEVICE_DRAFT_KEY);
   } catch {
-    // Private browsing can disable storage.
+    return;
   }
 }
 
@@ -425,7 +425,6 @@ export function reduceDevice(model: DeviceModel, event: DeviceEvent): DeviceMode
         ? { ...model, inflight: null, error: event.message }
         : model;
     case "needs_fresh_mfa":
-      // The decide() 403 is the gate. This does not measure the 15 minute window.
       return model.kind === "review"
         ? { kind: "verify", userCode: model.userCode, consent: { ...model.consent, approval: "verify" }, challengeToken: null, error: null, inflight: null }
         : model;

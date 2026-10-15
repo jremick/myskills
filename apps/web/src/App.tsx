@@ -5117,8 +5117,6 @@ function AuthWidget({
   const resetEmailRef = useRef<HTMLInputElement>(null);
   const forgotRef = useRef<HTMLButtonElement>(null);
 
-  // Focus moves only when the step changes, never on a keystroke: to the
-  // step's first field, or back to "Forgot password?" after "Back to sign in".
   useEffect(() => {
     if (previousStep.current === step) return;
     previousStep.current = step;
