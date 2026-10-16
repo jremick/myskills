@@ -19918,7 +19918,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 1348,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "300cee0d4fa0ef34ed2dc5b0b1e751f8fa98ba2631b660d3ebff66637515049f",
           "anchor": "test(\"Back and Forward within one architecture restore each entry's preview context, never widen an organization, and keep the draft\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -19963,7 +19963,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 1348,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "300cee0d4fa0ef34ed2dc5b0b1e751f8fa98ba2631b660d3ebff66637515049f",
           "anchor": "test(\"Back and Forward within one architecture restore each entry's preview context, never widen an organization, and keep the draft\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20008,7 +20008,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 584,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "300cee0d4fa0ef34ed2dc5b0b1e751f8fa98ba2631b660d3ebff66637515049f",
           "anchor": "test(\"deep links select the requested architecture and context, and the launcher opens a full-width Workbench that survives reload\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20053,7 +20053,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 1348,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "300cee0d4fa0ef34ed2dc5b0b1e751f8fa98ba2631b660d3ebff66637515049f",
           "anchor": "test(\"Back and Forward within one architecture restore each entry's preview context, never widen an organization, and keep the draft\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20098,7 +20098,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 1720,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "300cee0d4fa0ef34ed2dc5b0b1e751f8fa98ba2631b660d3ebff66637515049f",
           "anchor": "test(\"an organization-only reader sees only the safe projection: no hidden nodes, edit affordance, node widening or extra spec requests\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20143,7 +20143,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 827,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "300cee0d4fa0ef34ed2dc5b0b1e751f8fa98ba2631b660d3ebff66637515049f",
           "anchor": "test(\"message-only changes guard other architectures and outside links; cancelled transitions restore the URL and draft without double prompts\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20188,7 +20188,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 1348,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "300cee0d4fa0ef34ed2dc5b0b1e751f8fa98ba2631b660d3ebff66637515049f",
           "anchor": "test(\"Back and Forward within one architecture restore each entry's preview context, never widen an organization, and keep the draft\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20233,7 +20233,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 714,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "300cee0d4fa0ef34ed2dc5b0b1e751f8fa98ba2631b660d3ebff66637515049f",
           "anchor": "test(\"Structure selection hands off to the Workbench with its context; Back and Forward keep the draft, named change and fitted canvas while the overview keeps the saved result\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20360,7 +20360,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 890,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "300cee0d4fa0ef34ed2dc5b0b1e751f8fa98ba2631b660d3ebff66637515049f",
           "anchor": "test(\"a history draft names its changes and saves against the latest revision token, keeping spec, message and named changes after failed and conflicting saves\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20725,7 +20725,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 1114,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "300cee0d4fa0ef34ed2dc5b0b1e751f8fa98ba2631b660d3ebff66637515049f",
           "anchor": "test(\"stale saved and draft previews never replace the current architecture or context, and edits clear an older draft preview\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"

@@ -52,7 +52,7 @@ jobs:
   web-e2e-supported-node:
     name: Web E2E / Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:

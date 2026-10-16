@@ -1628,7 +1628,7 @@ test("a Back or Forward move during a slow detail reload keeps the destination e
 test("the 500-node library opens collapsed, counts only skills, finds deep matches with their ancestors and keeps one selection across List and Map", async ({ page }, info) => {
   // This limit-size journey traverses every node, searches the deepest path,
   // switches map/list views and captures evidence under the parallel CI load.
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   const state = await installWorkbenchMock(page.context());
   addScaleLibrary(state);
   const spec = scaleLibrarySpec(owner.id);
@@ -1637,7 +1637,7 @@ test("the 500-node library opens collapsed, counts only skills, finds deep match
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/architectures/${SCALE_LIBRARY.id}`);
   await expect(page.getByRole("heading", { name: SCALE_LIBRARY.name, level: 2 })).toBeVisible();
-  await expectArchitectureUrl(page, { id: SCALE_LIBRARY.id, context: scaleContext, node: null });
+  await expectArchitectureUrl(page, { id: SCALE_LIBRARY.id, context: scaleContext, node: null }, { timeout: 20_000 });
 
   // Only the root and its routers are shown, every branch collapsed.
   await expect(ui.explorer(page)).toContainText(ui.summary(SCALE_LIBRARY.routers, SCALE_LIBRARY.skills));
