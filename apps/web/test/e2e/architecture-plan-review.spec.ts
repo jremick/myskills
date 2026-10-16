@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test.js";
 
 // Test first: rendered plan review must bind the selected saved revision and
 // observation. Approval is a distinct click with the complete review digest;

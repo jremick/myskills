@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "../browser-test.js";
 
 /**
  * Real browser + nginx web proxy + API + MCP service + Postgres. One public

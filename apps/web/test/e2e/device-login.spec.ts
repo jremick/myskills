@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test.js";
 
 // Written before implementation: inspect before consent, preserve failed
 // approval, explicit denial, no credentials in URLs/storage or automatic grant.

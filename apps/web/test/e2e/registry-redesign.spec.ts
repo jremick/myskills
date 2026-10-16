@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./browser-test.js";
 import { workspaceTarget } from "../workspace-target-fixture.js";
 
 // Written before the redesign. Existing release-history tests protect exact-version

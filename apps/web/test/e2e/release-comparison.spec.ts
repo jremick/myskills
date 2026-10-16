@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./browser-test.js";
 
 // Written before the component. These fixtures exercise the real browser and
 // exact bundle client, not persistence or full-stack release acceptance.

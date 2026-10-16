@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "./browser-test.js";
 import { captureMfaEvidence, decodeEnrollmentQr, enrollmentCode, observeEnrollmentPrivacy } from "./mfa-test-support.js";
 
 const browserExecutable = process.env.MYSKILLS_E2E_BROWSER_EXECUTABLE?.trim();

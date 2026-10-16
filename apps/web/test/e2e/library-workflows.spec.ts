@@ -1,5 +1,5 @@
 import { writeFile } from "node:fs/promises";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "./browser-test.js";
 
 // Contract journeys written before the Library workflow implementation. They drive
 // the actual app through its HTTP boundary with synthetic fixtures only. Failure

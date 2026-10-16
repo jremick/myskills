@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../browser-test.js";
 
 /** Real browser + API + Postgres journey. No intercepted API responses. */
 test("registry bundles keep relationships through inspect, save and Library reopen", async ({ page, request, baseURL }, testInfo) => {

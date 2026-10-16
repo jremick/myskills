@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test.js";
 
 // UI-only contract, written before implementation. Real team authorization,
 // persistence, upstream bytes and revocation races are verified by the API and

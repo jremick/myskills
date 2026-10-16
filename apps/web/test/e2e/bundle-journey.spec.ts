@@ -1,4 +1,4 @@
-import { expect, test as base, type Locator, type Page, type Route } from "@playwright/test";
+import { expect, test as base, type Locator, type Page, type Route } from "./browser-test.js";
 
 // Authored before the bundle UI, from .private/bundles/contract.md and
 // failure-cases.md. Browser fixtures pin UI behaviour: unique server totals,

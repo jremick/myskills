@@ -2,13 +2,14 @@ import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, isolateBrowserFonts, type Page } from "../browser-test.js";
 import { runCli, type CliRuntime } from "../../../../cli/dist/cli.js";
 import { startTeamLibraryHarness, type TeamLibraryActor } from "./team-library-harness.js";
 
 // Written before production changes. Real browser -> HTTP -> production services
 // -> disposable Postgres, including persisted artifact bytes. Only GitHub's
-// transport is deterministic; no browser/API route is mocked. Test-only setup
+// transport and external font stylesheet are deterministic; application API routes
+// stay live. Test-only setup
 // seeds accounts, then signs in and manages membership through the real API.
 // Failure targets: personal-only controls, wrong release owner, self-review,
 // contributor departure breaking held candidate/import continuity, early adoption,
@@ -22,6 +23,7 @@ test("Engineering curators source, review and adopt team-owned skills across cur
   const api = fixture.api;
   async function actorPage(actor: TeamLibraryActor): Promise<Page> {
     const context = await browser.newContext(); contexts.push(context);
+    await isolateBrowserFonts(context);
     await context.addCookies([{ name: "myskills_session", value: actor.token, url: fixture.baseURL, httpOnly: true, sameSite: "Lax" }]);
     await context.addInitScript((session) => localStorage.setItem("myskills-app:web-session", JSON.stringify(session)), { user: actor.user, expiresAt: new Date(Date.now() + 3_600_000).toISOString() });
     const page = await context.newPage();

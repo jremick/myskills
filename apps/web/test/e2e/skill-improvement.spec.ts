@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test.js";
 
 // Journey specified before the UI implementation. API/permission behavior is
 // independently exercised by the memory and Postgres lifecycle journeys.

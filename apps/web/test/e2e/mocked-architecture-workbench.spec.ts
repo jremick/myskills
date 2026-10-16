@@ -1,5 +1,5 @@
 import { writeFile } from "node:fs/promises";
-import { expect, test, type BrowserContext, type Locator, type Page, type Route } from "@playwright/test";
+import { expect, test, type BrowserContext, type Locator, type Page, type Route } from "./browser-test.js";
 import {
   compileArchitecture,
   createArchitectureDiagramArtifact,
@@ -1278,9 +1278,6 @@ const nativeTabTest = test.extend({ channel: browserExecutable ? undefined : "ch
 
 nativeTabTest("a modified click on the launcher opens a separate tab without prompting or disturbing the draft", async ({ page, context }) => {
   await installWorkbenchMock(context);
-  // This navigation check does not need web fonts. A pending external stylesheet
-  // also blocks DOMContentLoaded in the new tab, even after its HTML has arrived.
-  await context.route("https://fonts.googleapis.com/**", (route) => route.fulfill({ contentType: "text/css", body: "" }));
   const dialogs = trackDialogs(page);
   await page.setViewportSize({ width: 1280, height: 860 });
   await page.goto(`/architectures/${LARGE_ID}`);

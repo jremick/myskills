@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "./browser-test.js";
 
 // Test-first Wave 2 acceptance. Existing DOM tests cover API fallbacks/epochs.
 // These browser journeys protect composition, mobile selection/focus, exact hash

@@ -1,4 +1,4 @@
-import { expect,test,type Page } from "@playwright/test";
+import { expect,test,type Page } from "./browser-test.js";
 import { defaultPackageEvaluationSuite,evaluatePackageFiles,scanPackageFiles } from "@myskills-app/skill-package";
 import { packageEvaluationSummary } from "@myskills-app/core";
 // Browser wiring/layout proof only. Deterministic outcomes are computed locally;

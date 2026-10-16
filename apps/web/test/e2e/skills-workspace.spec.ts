@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "./browser-test.js";
 
 // Written before the Skills workspace consolidation. Synthetic route fixtures
 // only. These journeys protect one exact skill/version identity across scope,

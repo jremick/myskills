@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test.js";
 
 // Before implementation: keyboard/mobile task search, exact-release link,
 // method/uncertainty, no-match and retained ordinary search; no mutation.

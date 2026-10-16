@@ -69,6 +69,11 @@ the worker and are excluded from evidence exports. The controller collects only 
 sanitized browser evidence. Remove retained private diagnostics with the associated run directory.
 Vite output is included in the browser job log.
 
+Web browser tests replace the external Google Fonts stylesheet with an empty response through
+the shared `browser-test.ts` fixture. This keeps page load and new tabs independent of font-service
+availability. Production font loading is unchanged; application assets and API requests retain
+their existing test behavior. Tests that create their own browser contexts use the same helper.
+
 Keep the external worker's global job lock around the whole invocation. Internal parallelism
 does not permit concurrent app runs. Set `LOCAL_CI_VERIFY_LANES=1`, or remove
 the variable, to roll back to serial execution without changing any gate.

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./browser-test.js";
 
 const date = "2026-09-27T00:00:00Z";
 async function fixture(page: Page, mfaVerified = true, mfaEnabled = true) {
