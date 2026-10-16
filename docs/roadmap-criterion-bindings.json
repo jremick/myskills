@@ -2100,7 +2100,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 216,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"copying is exact and honest, and platform, user-action, unsupported and owner paths keep their rules\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4360,7 +4360,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 121,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"a long exact version stays whole and its command leads technical detail at desktop and mobile widths\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4399,7 +4399,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 121,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"a long exact version stays whole and its command leads technical detail at desktop and mobile widths\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4495,7 +4495,7 @@
         {
           "path": "apps/web/test/e2e/author-review-redesign.spec.ts",
           "line": 58,
-          "sha256": "cbccbff03d90146067c8b242dcdc61d16942758d48dd2ed7f51d7a0abc2f2e4c",
+          "sha256": "803adcc9cea23c2a1005ccfbaba26ac04c3087275ea0fb59908ec9a49fde96c7",
           "anchor": "if (/^\\/v1\\/evaluations\\/releases\\/[^/]+\\/[^/]+\\/(runs|summary)$/.test(path) && method === \"GET\") return reply({ runs: [] });",
           "command": "npm run test:e2e -w @myskills-app/web -- author-review-redesign.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4551,7 +4551,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 216,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"copying is exact and honest, and platform, user-action, unsupported and owner paths keep their rules\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4582,7 +4582,7 @@
         {
           "path": "apps/web/test/e2e/branding.spec.ts",
           "line": 99,
-          "sha256": "b904fcdfb5321a18b45cc83664eab5e18f555d8c0b4da00a0b9cb7c751e7e752",
+          "sha256": "762cd96d45001600a86c69836e7dd62e3b470336388c8405db4d73d517c82827",
           "anchor": "test(\"admin branding survives reload, navigation and anonymous reads; drafts, errors and reset stay safe\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- branding.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4590,7 +4590,7 @@
         {
           "path": "apps/web/test/e2e/design-foundations.spec.ts",
           "line": 63,
-          "sha256": "bf7293e88cc988a4dbde73745d1a4142f4b905a4fb1834ad72b951405ccf435b",
+          "sha256": "1c09f1851b67a7b3097c2946645eb8bdf7eafde94cd427ac48913b14f2ff6d24",
           "anchor": "test(\"rollback confirms exact target and version, traps focus, cancels, and retries without duplicate intent\", async ({ page }, testInfo) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- design-foundations.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4621,7 +4621,7 @@
         {
           "path": "apps/web/test/e2e/branding.spec.ts",
           "line": 99,
-          "sha256": "b904fcdfb5321a18b45cc83664eab5e18f555d8c0b4da00a0b9cb7c751e7e752",
+          "sha256": "762cd96d45001600a86c69836e7dd62e3b470336388c8405db4d73d517c82827",
           "anchor": "test(\"admin branding survives reload, navigation and anonymous reads; drafts, errors and reset stay safe\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- branding.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4629,7 +4629,7 @@
         {
           "path": "apps/web/test/e2e/design-foundations.spec.ts",
           "line": 63,
-          "sha256": "bf7293e88cc988a4dbde73745d1a4142f4b905a4fb1834ad72b951405ccf435b",
+          "sha256": "1c09f1851b67a7b3097c2946645eb8bdf7eafde94cd427ac48913b14f2ff6d24",
           "anchor": "test(\"rollback confirms exact target and version, traps focus, cancels, and retries without duplicate intent\", async ({ page }, testInfo) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- design-foundations.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4668,7 +4668,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 216,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"copying is exact and honest, and platform, user-action, unsupported and owner paths keep their rules\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4699,7 +4699,7 @@
         {
           "path": "apps/web/test/e2e/branding.spec.ts",
           "line": 99,
-          "sha256": "b904fcdfb5321a18b45cc83664eab5e18f555d8c0b4da00a0b9cb7c751e7e752",
+          "sha256": "762cd96d45001600a86c69836e7dd62e3b470336388c8405db4d73d517c82827",
           "anchor": "test(\"admin branding survives reload, navigation and anonymous reads; drafts, errors and reset stay safe\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- branding.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4707,7 +4707,7 @@
         {
           "path": "apps/web/test/e2e/design-foundations.spec.ts",
           "line": 150,
-          "sha256": "bf7293e88cc988a4dbde73745d1a4142f4b905a4fb1834ad72b951405ccf435b",
+          "sha256": "1c09f1851b67a7b3097c2946645eb8bdf7eafde94cd427ac48913b14f2ff6d24",
           "anchor": "test(\"shared page foundations keep readable gutters, control borders and headings across screen sizes\", async ({ page }, testInfo) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- design-foundations.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4746,7 +4746,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 159,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"unavailable pins, a missing default, history retry and stale responses never substitute a release\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4785,7 +4785,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 216,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"copying is exact and honest, and platform, user-action, unsupported and owner paths keep their rules\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4926,7 +4926,7 @@
         {
           "path": "apps/web/test/e2e/author-review-redesign.spec.ts",
           "line": 66,
-          "sha256": "cbccbff03d90146067c8b242dcdc61d16942758d48dd2ed7f51d7a0abc2f2e4c",
+          "sha256": "803adcc9cea23c2a1005ccfbaba26ac04c3087275ea0fb59908ec9a49fde96c7",
           "anchor": "if (/^\\/v1\\/(review\\/)?submissions\\/[^/]+\\/bundle$/.test(path)) return route.fulfill({ json: { files: [{ path: \"SKILL.md\", content: \"# Reviewed exact artifact\\nUse verified release evidence.\" }] }, headers: { \"x-myskills",
           "command": "npm run test:e2e -w @myskills-app/web -- author-review-redesign.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4982,7 +4982,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 159,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"unavailable pins, a missing default, history retry and stale responses never substitute a release\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5021,7 +5021,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 216,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"copying is exact and honest, and platform, user-action, unsupported and owner paths keep their rules\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5060,7 +5060,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 216,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"copying is exact and honest, and platform, user-action, unsupported and owner paths keep their rules\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5091,7 +5091,7 @@
         {
           "path": "apps/web/test/e2e/branding.spec.ts",
           "line": 99,
-          "sha256": "b904fcdfb5321a18b45cc83664eab5e18f555d8c0b4da00a0b9cb7c751e7e752",
+          "sha256": "762cd96d45001600a86c69836e7dd62e3b470336388c8405db4d73d517c82827",
           "anchor": "test(\"admin branding survives reload, navigation and anonymous reads; drafts, errors and reset stay safe\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- branding.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5099,7 +5099,7 @@
         {
           "path": "apps/web/test/e2e/design-foundations.spec.ts",
           "line": 63,
-          "sha256": "bf7293e88cc988a4dbde73745d1a4142f4b905a4fb1834ad72b951405ccf435b",
+          "sha256": "1c09f1851b67a7b3097c2946645eb8bdf7eafde94cd427ac48913b14f2ff6d24",
           "anchor": "test(\"rollback confirms exact target and version, traps focus, cancels, and retries without duplicate intent\", async ({ page }, testInfo) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- design-foundations.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5212,7 +5212,7 @@
         {
           "path": "apps/web/test/e2e/skill-pane.spec.ts",
           "line": 121,
-          "sha256": "a95cf94e8791bb88ec641682be3ae193ca323f165993862207eb655f871b0dc8",
+          "sha256": "e4e5a7af60ad0158d00fb7c1d0b4d4e31c40792da71791ceb292e9d9e7ca9145",
           "anchor": "test(\"a long exact version stays whole and its command leads technical detail at desktop and mobile widths\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- skill-pane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5336,7 +5336,7 @@
         {
           "path": "apps/web/test/e2e/release-comparison.spec.ts",
           "line": 122,
-          "sha256": "d46cb1e480aa3635661b0f685a806d747eb7fd9aeedaba5883550319203a0c3e",
+          "sha256": "875398fb81c746ad68615c446ca7db2adf5a56ab5f1c711c6c3df89899a42216",
           "anchor": "test(\"clears held comparison when a repeated exact fetch loses current visibility\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- release-comparison.spec.ts",
           "execution": "local_node22_working_source_pass",
@@ -5653,7 +5653,7 @@
         {
           "path": "apps/web/test/e2e/author-review-redesign.spec.ts",
           "line": 66,
-          "sha256": "cbccbff03d90146067c8b242dcdc61d16942758d48dd2ed7f51d7a0abc2f2e4c",
+          "sha256": "803adcc9cea23c2a1005ccfbaba26ac04c3087275ea0fb59908ec9a49fde96c7",
           "anchor": "if (/^\\/v1\\/(review\\/)?submissions\\/[^/]+\\/bundle$/.test(path)) return route.fulfill({ json: { files: [{ path: \"SKILL.md\", content: \"# Reviewed exact artifact\\nUse verified release evidence.\" }] }, headers: { \"x-myskills",
           "command": "npm run test:e2e -w @myskills-app/web -- author-review-redesign.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -6107,7 +6107,7 @@
         {
           "path": "apps/web/test/e2e/author-review-redesign.spec.ts",
           "line": 66,
-          "sha256": "cbccbff03d90146067c8b242dcdc61d16942758d48dd2ed7f51d7a0abc2f2e4c",
+          "sha256": "803adcc9cea23c2a1005ccfbaba26ac04c3087275ea0fb59908ec9a49fde96c7",
           "anchor": "if (/^\\/v1\\/(review\\/)?submissions\\/[^/]+\\/bundle$/.test(path)) return route.fulfill({ json: { files: [{ path: \"SKILL.md\", content: \"# Reviewed exact artifact\\nUse verified release evidence.\" }] }, headers: { \"x-myskills",
           "command": "npm run test:e2e -w @myskills-app/web -- author-review-redesign.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -8161,7 +8161,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 198,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner saves and confirms organization access revocation in Sharing, then retries a migration from Change pattern with the same idempotency key\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -9959,7 +9959,7 @@
         {
           "path": "apps/web/test/e2e/author-review-redesign.spec.ts",
           "line": 58,
-          "sha256": "cbccbff03d90146067c8b242dcdc61d16942758d48dd2ed7f51d7a0abc2f2e4c",
+          "sha256": "803adcc9cea23c2a1005ccfbaba26ac04c3087275ea0fb59908ec9a49fde96c7",
           "anchor": "if (/^\\/v1\\/evaluations\\/releases\\/[^/]+\\/[^/]+\\/(runs|summary)$/.test(path) && method === \"GET\") return reply({ runs: [] });",
           "command": "npm run test:e2e -w @myskills-app/web -- author-review-redesign.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -15898,7 +15898,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 252,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner can create a team-owned shell and unsaved editor changes guard unload and architecture selection\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -17500,7 +17500,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18677,7 +18677,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 198,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner saves and confirms organization access revocation in Sharing, then retries a migration from Change pattern with the same idempotency key\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -19801,7 +19801,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 252,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner can create a team-owned shell and unsaved editor changes guard unload and architecture selection\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -19917,8 +19917,8 @@
       "checks": [
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
-          "line": 1348,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "line": 1345,
+          "sha256": "0a02f7c2d6ba3b3e321de664c3fb664b7992eb7671544288ed9b051f9b796ea4",
           "anchor": "test(\"Back and Forward within one architecture restore each entry's preview context, never widen an organization, and keep the draft\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -19926,7 +19926,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 320,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "for (const width of [1280, 390]) test(`architecture workspace puts saved work first and restores list focus at ${width}`, async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -19962,8 +19962,8 @@
       "checks": [
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
-          "line": 1348,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "line": 1345,
+          "sha256": "0a02f7c2d6ba3b3e321de664c3fb664b7992eb7671544288ed9b051f9b796ea4",
           "anchor": "test(\"Back and Forward within one architecture restore each entry's preview context, never widen an organization, and keep the draft\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -19971,7 +19971,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20008,7 +20008,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 584,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "0a02f7c2d6ba3b3e321de664c3fb664b7992eb7671544288ed9b051f9b796ea4",
           "anchor": "test(\"deep links select the requested architecture and context, and the launcher opens a full-width Workbench that survives reload\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20016,7 +20016,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20052,8 +20052,8 @@
       "checks": [
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
-          "line": 1348,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "line": 1345,
+          "sha256": "0a02f7c2d6ba3b3e321de664c3fb664b7992eb7671544288ed9b051f9b796ea4",
           "anchor": "test(\"Back and Forward within one architecture restore each entry's preview context, never widen an organization, and keep the draft\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20061,7 +20061,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20097,8 +20097,8 @@
       "checks": [
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
-          "line": 1720,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "line": 1717,
+          "sha256": "0a02f7c2d6ba3b3e321de664c3fb664b7992eb7671544288ed9b051f9b796ea4",
           "anchor": "test(\"an organization-only reader sees only the safe projection: no hidden nodes, edit affordance, node widening or extra spec requests\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20106,7 +20106,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20143,7 +20143,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 827,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "0a02f7c2d6ba3b3e321de664c3fb664b7992eb7671544288ed9b051f9b796ea4",
           "anchor": "test(\"message-only changes guard other architectures and outside links; cancelled transitions restore the URL and draft without double prompts\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20151,7 +20151,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20187,8 +20187,8 @@
       "checks": [
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
-          "line": 1348,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "line": 1345,
+          "sha256": "0a02f7c2d6ba3b3e321de664c3fb664b7992eb7671544288ed9b051f9b796ea4",
           "anchor": "test(\"Back and Forward within one architecture restore each entry's preview context, never widen an organization, and keep the draft\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20196,7 +20196,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 340,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "for (const width of [1280, 390]) test(`architecture draft survives New and mobile Back without weakening discard protection at ${width}`, async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20233,7 +20233,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 714,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "0a02f7c2d6ba3b3e321de664c3fb664b7992eb7671544288ed9b051f9b796ea4",
           "anchor": "test(\"Structure selection hands off to the Workbench with its context; Back and Forward keep the draft, named change and fitted canvas while the overview keeps the saved result\", async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20270,7 +20270,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20315,7 +20315,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 198,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner saves and confirms organization access revocation in Sharing, then retries a migration from Change pattern with the same idempotency key\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20360,7 +20360,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 890,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "0a02f7c2d6ba3b3e321de664c3fb664b7992eb7671544288ed9b051f9b796ea4",
           "anchor": "test(\"a history draft names its changes and saves against the latest revision token, keeping spec, message and named changes after failed and conflicting saves\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20399,7 +20399,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 198,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner saves and confirms organization access revocation in Sharing, then retries a migration from Change pattern with the same idempotency key\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20444,7 +20444,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 198,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner saves and confirms organization access revocation in Sharing, then retries a migration from Change pattern with the same idempotency key\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20509,7 +20509,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20566,7 +20566,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 152,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner creates a private draft without a preview and the narrow layout remains usable\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20623,7 +20623,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 1090,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "for (const width of [1440, 390, 320]) test(`the Structure list, inspector and map stay reachable and keyboard-operable at ${width}`, async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20680,7 +20680,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20725,7 +20725,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-workbench.spec.ts",
           "line": 1114,
-          "sha256": "abb38c4fed62eb53f6b3a25e9f8917f50c980e54017793b1d9db320576a9e280",
+          "sha256": "0a02f7c2d6ba3b3e321de664c3fb664b7992eb7671544288ed9b051f9b796ea4",
           "anchor": "test(\"stale saved and draft previews never replace the current architecture or context, and edits clear an older draft preview\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-workbench.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20782,7 +20782,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20839,7 +20839,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 320,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "for (const width of [1280, 390]) test(`architecture workspace puts saved work first and restores list focus at ${width}`, async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20896,7 +20896,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 42,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"signed-in owner inspects the same profile-filtered nodes in the Structure list and map, and exports stay the exact API artifact\", async ({ page, context }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -20953,7 +20953,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 340,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "for (const width of [1280, 390]) test(`architecture draft survives New and mobile Back without weakening discard protection at ${width}`, async ({ page }, info) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -21010,7 +21010,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 252,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner can create a team-owned shell and unsaved editor changes guard unload and architecture selection\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -21067,7 +21067,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 152,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner creates a private draft without a preview and the narrow layout remains usable\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -21124,7 +21124,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 152,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner creates a private draft without a preview and the narrow layout remains usable\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -21181,7 +21181,7 @@
         {
           "path": "apps/web/test/e2e/mocked-architecture-control-plane.spec.ts",
           "line": 198,
-          "sha256": "096338c9a871f669d6a6a8e0645ef096c963265447ae07ee2178a12255a9f478",
+          "sha256": "6e10ccaf6263665eba59b04fa6bdf02a335e6dd1d0d3bddbf712bc6fb81c3074",
           "anchor": "test(\"owner saves and confirms organization access revocation in Sharing, then retries a migration from Change pattern with the same idempotency key\", async ({ page }) => {",
           "command": "npm run test:e2e -w @myskills-app/web -- mocked-architecture-control-plane.spec.ts",
           "execution": "prepared_not_run_on_final_commit"
