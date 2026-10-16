@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../browser-test.js";
 
 // Authored before the selection implementation. Real browser, API and Postgres;
 // no intercepted responses. Detect lost membership on reload, overlap damage,

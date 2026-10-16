@@ -1,4 +1,4 @@
-import { expect, test as base, type Locator, type Page } from "@playwright/test";
+import { expect, test as base, type Locator, type Page } from "./browser-test.js";
 
 // Written before the second skill pane, from .private/skill-info-pane/test-plan.md.
 // release-history.spec.ts covers exact-version URL history and keyboard picks;

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "../browser-test.js";
 
 // Failure ledger, written before production code:
 // - A fixture-only editor hides missing persistence: use real API/Postgres and reload.

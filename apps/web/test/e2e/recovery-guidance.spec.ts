@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./browser-test.js";
 
 // Test-first browser boundary: receipt imports are local evidence, never a
 // deployment command or a promise that an old backup is restorable.

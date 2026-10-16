@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test.js";
 
 const codex = { name: "codex", installTarget: "codex-skill", status: "supported" };
 const generic = { name: "generic", installTarget: "prompt-pack", status: "supported" };

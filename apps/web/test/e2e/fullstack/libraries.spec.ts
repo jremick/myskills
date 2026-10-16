@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../browser-test.js";
 
 // Persistent journey, with no route mocks. Failure targets: lost state on reload,
 // unintended self-review default, unauthorized resolution, stale adoption after

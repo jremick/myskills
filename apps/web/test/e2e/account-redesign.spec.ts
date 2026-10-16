@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test.js";
 
 // Test-first acceptance for the heading that follows each authentication step.
 // This fixture never authenticates or stores a real session.

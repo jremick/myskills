@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./browser-test.js";
 
 // Written before the composition change. Exercise the actual app through its
 // HTTP boundary; fixtures contain synthetic content and never call a service.

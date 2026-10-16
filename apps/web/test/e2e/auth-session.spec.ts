@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test.js";
 
 const expiresAt = "2027-06-04T01:00:00.000Z";
 const user = {

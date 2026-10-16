@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./browser-test.js";
 
 const expiresAt = "2027-06-04T01:00:00.000Z";
 const owner = {

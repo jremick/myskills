@@ -1,4 +1,4 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Route } from "./browser-test.js";
 
 // Mocked API responses with synthetic values. These checks prove browser
 // behavior only; they are not provider, deployment or full-stack evidence.

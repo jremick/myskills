@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "../browser-test.js";
 import { runOperationalAcceptance } from "../../../../../scripts/operational-acceptance.mjs";
 import { proveCodexRecognition } from "../../../../../scripts/prove-codex-recognition.mjs";
 import { exerciseDrafts } from "./author-drafts.js";

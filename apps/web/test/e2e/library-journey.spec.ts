@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test.js";
 
 // Authored before Libraries UI implementation. API fixtures isolate browser
 // interaction; the persistent API and production-like tests prove enforcement.

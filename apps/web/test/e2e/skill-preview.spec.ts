@@ -1,4 +1,4 @@
-import { expect, test as base, type Page } from "@playwright/test";
+import { expect, test as base, type Page } from "./browser-test.js";
 
 // Synthetic public registry fixtures follow registry-redesign.spec.ts. These
 // browser checks cover the preview interaction; API authorization is tested

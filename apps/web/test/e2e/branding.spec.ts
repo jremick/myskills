@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./browser-test.js";
 import { generateTotpCode, hashPassword } from "@myskills-app/auth";
 import { buildApp } from "../../../api/dist/app.js";
 import { AuthService } from "../../../api/dist/auth/service.js";

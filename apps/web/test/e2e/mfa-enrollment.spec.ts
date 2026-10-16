@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test.js";
 import { captureMfaEvidence, decodeEnrollmentQr, observeEnrollmentPrivacy } from "./mfa-test-support.js";
 
 // Assertions deliberately report booleans/counts instead of sensitive values.
