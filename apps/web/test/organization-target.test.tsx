@@ -57,6 +57,7 @@ test("organization management loads a scoped detail and keeps member/policy acti
   await waitFor(() => assert.equal(calls.includes("role:user-2:admin"), true));
 
   fireEvent.click(view.getByRole("button", { name: "Change policy" }));
+  fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
   fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
   fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
   await waitFor(() => assert.equal(calls.includes("append-policy"), true));
@@ -143,6 +144,7 @@ test("organization policy controls stay disabled while a revision is being saved
   const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByRole("heading", { name: "Acme Skills" });
   fireEvent.click(view.getByRole("button", { name: "Change policy" }));
+  fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
   fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
   fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
   await waitFor(() => assert.ok(finishSave));
@@ -150,6 +152,91 @@ test("organization policy controls stay disabled while a revision is being saved
     for (const control of view.container.querySelectorAll<HTMLInputElement>(".organization-policy-form input")) assert.equal(control.disabled, true);
   } finally { finishSave?.(); }
   await view.findByText("Policy revision 1 was appended and activated.");
+});
+
+for (const activated of [false, true]) {
+  test(`policy append reports an existing revision honestly (activated: ${activated})`, async () => {
+    const organization = sampleOrganization();
+    const client = {
+      async listOrganizations() { return [organization]; },
+      async listOrganizationPendingInvitations() { return []; },
+      async getOrganization() { return organization; },
+      async listOrganizationMembers() { return []; },
+      async listOrganizationInvitations() { return []; },
+      async listOrganizationPolicies() { return [samplePolicyRevision()]; },
+      async listOrganizationTeams() { return []; },
+      async appendOrganizationPolicy() { return { revision: samplePolicyRevision(), created: false, activated }; },
+    } as unknown as RegistryClient;
+    const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
+    await view.findByRole("heading", { name: "Acme Skills" });
+    fireEvent.click(view.getByRole("button", { name: "Change policy" }));
+    fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
+    fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
+    fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
+    await view.findByText(`No new policy revision was created; revision 1 already exists${activated ? " and was activated" : "; the current policy remains unchanged"}.`);
+    assert.equal(view.queryByText(/was appended/), null);
+  });
+}
+
+test("policy append and activate list only the settings that changed", async () => {
+  const current = samplePolicy();
+  const organization = sampleOrganization();
+  const revised = {
+    ...samplePolicyRevision(),
+    id: "policy-2",
+    revisionNumber: 2,
+    reason: "More teams",
+    policy: {
+      ...current,
+      teams: { ...current.teams, membersCanCreateTeams: true },
+      limits: { ...current.limits, teamsPerOrganization: 50 },
+    },
+  };
+  const client = {
+    async listOrganizations() { return [organization]; },
+    async listOrganizationPendingInvitations() { return []; },
+    async getOrganization() { return organization; },
+    async listOrganizationMembers() { return []; },
+    async listOrganizationInvitations() { return []; },
+    async listOrganizationPolicies() { return [samplePolicyRevision(), revised]; },
+    async listOrganizationTeams() { return []; },
+    async appendOrganizationPolicy() { return { revision: samplePolicyRevision(), created: true, activated: true }; },
+    async activateOrganizationPolicy() { return { revision: revised, activated: true as const, changed: true }; },
+  } as unknown as RegistryClient;
+  const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
+  await view.findByRole("heading", { name: "Acme Skills" });
+  fireEvent.click(view.getByRole("button", { name: "Change policy" }));
+  const review = view.getByRole("button", { name: "Review append and activate" }) as HTMLButtonElement;
+  assert.equal(review.disabled, true);
+  fireEvent.click(review);
+  fireEvent.submit(view.container.querySelector(".organization-policy-form")!);
+  assert.equal(view.queryByRole("button", { name: "Confirm append and activate" }), null);
+
+  fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
+  fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
+  const append = policyAlert(view, "Confirm append and activate");
+  const appendChanges = within(append).getByRole("group", { name: "Changed policy settings" });
+  assert.deepEqual(policyTerms(appendChanges), ["Enable organization skill sharing"]);
+  assert.equal(policyValue(append, "Enable organization skill sharing"), "On before, Off after.");
+  assert.equal(within(append).queryByText("Let members create child teams"), null);
+  assert.equal(within(append).queryByText("Teams per organization"), null);
+  assert.equal((within(append).getByRole("button", { name: "Confirm append and activate" }) as HTMLButtonElement).disabled, false);
+
+  fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
+  const confirmAppend = within(append).getByRole("button", { name: "Confirm append and activate" }) as HTMLButtonElement;
+  assert.equal(confirmAppend.disabled, true);
+  assert.ok(within(append).getByText("No settings differ from the current policy."));
+  fireEvent.click(confirmAppend);
+
+  fireEvent.click(view.getByRole("button", { name: "Activate" }));
+  const activate = policyAlert(view, "Confirm activate");
+  const activateChanges = within(activate).getByRole("group", { name: "Changed policy settings" });
+  assert.deepEqual(policyTerms(activateChanges), ["Let members create child teams", "Teams per organization"]);
+  assert.equal(policyValue(activate, "Let members create child teams"), "Off before, On after.");
+  assert.equal(policyValue(activate, "Teams per organization"), "100 before, 50 after.");
+  assert.equal(within(activate).queryByText("Enable organization skill sharing"), null);
+  assert.equal(within(activate).queryByText("Enable organization architecture sharing"), null);
+  assert.equal((within(activate).getByRole("button", { name: "Confirm activate" }) as HTMLButtonElement).disabled, false);
 });
 
 test("organization admins cannot select or change owner membership", async () => {
@@ -397,6 +484,21 @@ test("target detail failures render a retry state instead of the empty detail st
   await view.findByRole("heading", { name: "Personal Codex" });
   assert.equal(detailReads, 2);
 });
+
+function policyAlert(view: ReturnType<typeof render>, buttonName: string): HTMLElement {
+  const alert = view.getByRole("button", { name: buttonName }).closest("[role='alert']");
+  assert.ok(alert instanceof HTMLElement);
+  return alert;
+}
+
+function policyTerms(alert: HTMLElement): Array<string | null> {
+  return within(alert).getAllByRole("term").map((term) => term.textContent);
+}
+
+function policyValue(alert: HTMLElement, label: string): string {
+  const term = within(alert).getByText(label, { selector: "dt" });
+  return term.nextElementSibling?.textContent ?? "";
+}
 
 function sampleOrganization(): OrganizationDetail & OrganizationListItem {
   return {

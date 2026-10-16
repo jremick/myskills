@@ -40,6 +40,8 @@
 .branding-checkbox input { width: 16px; height: 16px; margin: 0; }
 .branding-preview { display: grid; gap: 16px; min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
 .branding-preview-label { color: var(--muted); font-size: 12px; }
+.branding-defaults { display: grid; justify-items: start; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.branding-defaults p { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 18px; }
 .branding-preview .brand-identity { font-size: 22px; }
 .branding-preview .brand-logo { height: 40px; width: 40px; }
 .account-workspace .branding-settings .admin-guidance { margin: 0; padding: 0; }

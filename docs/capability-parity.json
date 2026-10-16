@@ -160,7 +160,7 @@
         "detail": "Skill inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5742,
+          "line": 5767,
           "anchor": "function SkillDetail({"
         },
         "evidence": [
@@ -360,7 +360,7 @@
         "detail": "Exact version inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5742,
+          "line": 5767,
           "anchor": "function SkillDetail({"
         },
         "evidence": [
@@ -702,7 +702,7 @@
         "detail": "Metadata editor",
         "source": {
           "path": "apps/web/src/components/registry/SkillManagePanel.tsx",
-          "line": 116,
+          "line": 121,
           "anchor": "await client.updateSkillMetadata({ slug: record.slug, ...input });"
         },
         "evidence": [
@@ -806,13 +806,21 @@
         "detail": "Lifecycle controls",
         "source": {
           "path": "apps/web/src/components/registry/SkillManagePanel.tsx",
-          "line": 97,
+          "line": 101,
           "anchor": "if (pending.kind === \"skill\") await client.performSkillAction(record.slug, pending.action, reason.trim() || undefined);"
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Lifecycle controls. Runtime parity is not implied."
+          },
+          {
+            "level": "runtime",
+            "detail": "Local Node 24 DOM regression: archive and delete share the destructive group and require the saved slug or title plus a reason; restore remains separate. No real-host or deployed proof.",
+            "source": {
+              "path": "apps/web/test/App.test.tsx",
+              "line": 827
+            }
           }
         ]
       },
@@ -902,7 +910,7 @@
         "detail": "Release lifecycle controls",
         "source": {
           "path": "apps/web/src/components/registry/SkillManagePanel.tsx",
-          "line": 98,
+          "line": 102,
           "anchor": "else await client.performReleaseAction(record.slug, pending.version, pending.action, reason.trim() || undefined);"
         },
         "evidence": [
@@ -1004,7 +1012,7 @@
         "detail": "Sharing editor",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 6098,
+          "line": 6123,
           "anchor": "const next = await client.updateSkillSharing({"
         },
         "evidence": [
@@ -2402,6 +2410,14 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Review actions. Runtime parity is not implied."
+          },
+          {
+            "level": "runtime",
+            "detail": "Local Node 24 DOM regression: publish review retains slug@version alongside name and audience, including two skills with identical titles. No real-host or deployed proof.",
+            "source": {
+              "path": "apps/web/test/App.test.tsx",
+              "line": 2554
+            }
           }
         ]
       },
@@ -5554,7 +5570,7 @@
         "detail": "Teams dashboard",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3183,
+          "line": 3193,
           "anchor": "client.listTeams(),"
         },
         "evidence": [
@@ -5658,7 +5674,7 @@
         "detail": "Create team",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3275,
+          "line": 3285,
           "anchor": "await client.createTeam(teamName);"
         },
         "evidence": [
@@ -5768,7 +5784,7 @@
         "detail": "Team invitations",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3294,
+          "line": 3304,
           "anchor": "await client.inviteTeamMember(invitedTeam.id, email);"
         },
         "evidence": [
@@ -6076,7 +6092,7 @@
         "detail": "Team shared skills",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3184,
+          "line": 3194,
           "anchor": "client.listTeamSharedSkills(),"
         },
         "evidence": [
@@ -6295,7 +6311,7 @@
         "detail": "Organizations dashboard",
         "source": {
           "path": "apps/web/src/components/organization/OrganizationsDashboard.tsx",
-          "line": 357,
+          "line": 395,
           "anchor": "if (!client.createOrganization) {"
         },
         "evidence": [
@@ -6411,7 +6427,7 @@
         "detail": "Organizations dashboard",
         "source": {
           "path": "apps/web/src/components/organization/OrganizationsDashboard.tsx",
-          "line": 147,
+          "line": 185,
           "anchor": "|| !client.listOrganizationMembers"
         },
         "evidence": [
@@ -6522,7 +6538,7 @@
         "detail": "Organizations dashboard",
         "source": {
           "path": "apps/web/src/components/organization/OrganizationsDashboard.tsx",
-          "line": 518,
+          "line": 556,
           "anchor": "if (!client.inviteOrganizationMember || !email.trim()) return;"
         },
         "evidence": [
@@ -6632,7 +6648,7 @@
         "detail": "Organizations dashboard",
         "source": {
           "path": "apps/web/src/components/organization/OrganizationsDashboard.tsx",
-          "line": 557,
+          "line": 595,
           "anchor": "if (!client.updateOrganizationMemberRole || nextRole === member.role) return;"
         },
         "evidence": [
@@ -6748,13 +6764,21 @@
         "detail": "Organizations dashboard",
         "source": {
           "path": "apps/web/src/components/organization/OrganizationsDashboard.tsx",
-          "line": 740,
-          "anchor": "if (!client.appendOrganizationPolicy) return;"
+          "line": 778,
+          "anchor": "if (!client.appendOrganizationPolicy || !pendingAppend || state === \"saving\" || appendChanges.length === 0) return;"
         },
         "evidence": [
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: Organizations dashboard. Runtime parity is not implied."
+          },
+          {
+            "level": "runtime",
+            "detail": "Local Node 24 DOM regressions: empty policy diffs cannot be reviewed or confirmed; existing revision responses do not claim a new append, for both activation outcomes. No real-host or deployed proof.",
+            "source": {
+              "path": "apps/web/test/organization-target.test.tsx",
+              "line": 181
+            }
           }
         ]
       },
@@ -6865,7 +6889,7 @@
         "detail": "Organizations dashboard",
         "source": {
           "path": "apps/web/src/components/organization/OrganizationsDashboard.tsx",
-          "line": 899,
+          "line": 951,
           "anchor": "if (!client.createOrganizationTeam || !name.trim()) return;"
         },
         "evidence": [
@@ -10968,7 +10992,7 @@
         "detail": "Confirmation route; no request/resend action",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4296,
+          "line": 4306,
           "anchor": "await client.confirmEmailVerification({ token });"
         },
         "evidence": [
@@ -11184,7 +11208,7 @@
         "detail": "Account security forms",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4508,
+          "line": 4518,
           "anchor": "await client.changePassword({ currentPassword: passwordInput.currentPassword, password: passwordInput.password });"
         },
         "evidence": [
@@ -11301,7 +11325,7 @@
         "detail": "MFA setup/settings",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5348,
+          "line": 5373,
           "anchor": "const nextEnrollment = await client.startTotpEnrollment({ password: passwordOverride ?? password, label: \"1Password\" });"
         },
         "evidence": [
@@ -11425,7 +11449,7 @@
         "detail": "Token settings",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4580,
+          "line": 4590,
           "anchor": "const token = await client.createApiToken({"
         },
         "evidence": [

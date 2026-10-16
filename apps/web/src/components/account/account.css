@@ -152,6 +152,8 @@ main.account-workspace {
 .account-workspace .account-field .field-error { color: var(--danger); }
 .account-workspace .account-hint { margin-top: -6px; color: var(--muted); font-size: 12px; line-height: 16px; }
 .account-workspace .account-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.account-workspace .account-danger-zone { display: grid; justify-items: start; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.account-workspace .account-danger-zone > p { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 18px; }
 .account-workspace .account-select {
   width: 100%;
   height: 36px;
@@ -200,12 +202,15 @@ main.account-workspace {
 .account-workspace .account-user-status { display: grid; justify-items: start; gap: 4px; min-width: 0; }
 .account-workspace .account-user-status small { color: var(--muted); font-size: 12.5px; line-height: 18px; }
 .account-workspace .account-user-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.account-workspace .role-editor { display: flex; flex-wrap: wrap; gap: 4px 14px; min-width: 0; }
-.account-workspace .role-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 500; white-space: nowrap; }
-.account-workspace .role-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--teal); }
+.account-workspace .role-editor { display: grid; gap: 8px; min-width: 0; }
+.account-workspace .role-group-heading { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 600; }
+.account-workspace .role-editor > .role-group-heading:first-child { margin-top: 0; }
+.account-workspace .role-toggle { display: flex; align-items: flex-start; gap: 8px; min-height: 28px; color: var(--ink-soft); font-size: 13px; line-height: 18px; font-weight: 500; white-space: normal; }
+.account-workspace .role-toggle input { width: 16px; height: 16px; margin: 1px 0 0; accent-color: var(--teal); flex: 0 0 auto; }
+.account-workspace .role-toggle > span { display: grid; gap: 2px; min-width: 0; }
+.account-workspace .role-toggle small { color: var(--muted); font-size: 12.5px; line-height: 18px; font-weight: 400; }
 .account-workspace .role-toggle input:disabled + span { color: var(--muted); }
 
-/* Instance */
 .account-workspace .account-posture { max-width: 72ch; color: var(--ink-soft); font-size: 14px; line-height: 20px; }
 .account-workspace .account-posture strong { color: var(--ink); font-weight: 600; }
 .account-workspace .account-segmented { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -2720,8 +2720,18 @@ function ReviewDashboard({ client, onOpenSkill, session }: { client: RegistryCli
     };
     const label = labels[action];
     const release = { label: "Release", value: `${submission.slug}@${submission.version}` };
-    const details = action === "approve" && artifactSha256 ? [release, { label: "Artifact SHA-256", value: artifactSha256 }]
-      : action === "publish" && submission.approvedArtifactSha256 ? [release, { label: "Approved SHA-256", value: submission.approvedArtifactSha256 }]
+    const details = action === "publish"
+      ? [
+          release,
+          { label: "Skill name", value: submission.title },
+          { label: "Version", value: submission.version },
+          { label: "Audience", value: visibilityLabel(submission.visibility) },
+          ...(submission.approvedArtifactSha256
+            ? [{ label: "Approved SHA-256", value: submission.approvedArtifactSha256 }]
+            : []),
+        ]
+      : action === "approve" && artifactSha256
+        ? [release, { label: "Artifact SHA-256", value: artifactSha256 }]
         : [release];
     setConfirmation({
       key: `review-${action}`,
@@ -4799,46 +4809,51 @@ function AccountSettings({
                       <RotateCw size={16} aria-hidden="true" />
                       Reset authenticator
                     </Button>
+                  </div>
+                )}
+                {mfaEnabled && (
+                  <section aria-label="Remove authenticator app" className="account-danger-zone">
+                    <p>Remove MFA disables every authenticator app factor for this account.</p>
                     {!mfaRemovalOpen && (
                       <Button className="account-danger" ref={removeMfaRef} size="sm" type="button" variant="outline" onClick={openMfaRemoval}>
                         <X size={16} aria-hidden="true" />
                         Remove MFA
                       </Button>
                     )}
-                  </div>
-                )}
-                {mfaEnabled && mfaRemovalOpen && (
-                  <form className="account-form account-inline-form" onKeyDown={(event) => {
-                    if (event.key !== "Escape") return;
-                    event.preventDefault();
-                    closeMfaRemoval();
-                  }} onSubmit={(event) => {
-                    event.preventDefault();
-                    const formData = new window.FormData(event.currentTarget);
-                    requestMfaRemoval(String(formData.get("mfa-removal-password") ?? ""));
-                  }}>
-                    <label className="account-field">
-                      <span>Password for MFA removal</span>
-                      <Input
-                        aria-label="Password for MFA removal"
-                        autoComplete="current-password"
-                        id={`${baseId}-mfa-removal`}
-                        name="mfa-removal-password"
-                        onChange={(event) => setMfaPassword(event.target.value)}
-                        onInput={(event) => setMfaPassword(event.currentTarget.value)}
-                        required
-                        type="password"
-                        value={mfaPassword}
-                      />
-                    </label>
-                    <div className="account-actions">
-                      <Button disabled={state === "loading"} size="sm" type="submit" variant="destructive">
-                        <X size={16} aria-hidden="true" />
-                        Remove MFA
-                      </Button>
-                      <Button size="sm" type="button" variant="outline" onClick={closeMfaRemoval}>Cancel</Button>
-                    </div>
-                  </form>
+                    {mfaRemovalOpen && (
+                      <form className="account-form account-inline-form" onKeyDown={(event) => {
+                        if (event.key !== "Escape") return;
+                        event.preventDefault();
+                        closeMfaRemoval();
+                      }} onSubmit={(event) => {
+                        event.preventDefault();
+                        const formData = new window.FormData(event.currentTarget);
+                        requestMfaRemoval(String(formData.get("mfa-removal-password") ?? ""));
+                      }}>
+                        <label className="account-field">
+                          <span>Password for MFA removal</span>
+                          <Input
+                            aria-label="Password for MFA removal"
+                            autoComplete="current-password"
+                            id={`${baseId}-mfa-removal`}
+                            name="mfa-removal-password"
+                            onChange={(event) => setMfaPassword(event.target.value)}
+                            onInput={(event) => setMfaPassword(event.currentTarget.value)}
+                            required
+                            type="password"
+                            value={mfaPassword}
+                          />
+                        </label>
+                        <div className="account-actions">
+                          <Button disabled={state === "loading"} size="sm" type="submit" variant="destructive">
+                            <X size={16} aria-hidden="true" />
+                            Remove MFA
+                          </Button>
+                          <Button size="sm" type="button" variant="outline" onClick={closeMfaRemoval}>Cancel</Button>
+                        </div>
+                      </form>
+                    )}
+                  </section>
                 )}
                 {(!mfaEnabled || mfaSetupOpen) && (
                   <MfaSetupPanel
@@ -5057,23 +5072,33 @@ function RoleEditor({
   roles: string[];
   userEmail: string;
 }) {
+  const baseId = useId();
   return (
     <div aria-label={`Roles for ${userEmail}`} className="role-editor" role="group">
-      {ADMIN_ROLE_OPTIONS.map((role) => {
+      {ADMIN_ROLE_OPTIONS.map((role, index) => {
         const privilegedRole = role === "owner" || role === "admin";
         const removingLastRole = roles.length === 1 && roles.includes(role);
         const roleDisabled = disabled || removingLastRole || (privilegedRole && !canEditPrivilegedRoles);
+        const group = INSTANCE_ROLE_GROUPS[role];
+        const previous = index === 0 ? null : INSTANCE_ROLE_GROUPS[ADMIN_ROLE_OPTIONS[index - 1]!];
         return (
-          <label className="role-toggle" key={role}>
-            <input
-              aria-label={`Set ${userEmail} ${role} role`}
-              checked={roles.includes(role)}
-              disabled={roleDisabled}
-              onChange={() => onChange(toggleRole(roles, role))}
-              type="checkbox"
-            />
-            <span>{formatStatusLabel(role)}</span>
-          </label>
+          <Fragment key={role}>
+            {group !== previous && <h3 className="role-group-heading">{group}</h3>}
+            <label className="role-toggle">
+              <input
+                aria-describedby={`${baseId}-${role}`}
+                aria-label={`Set ${userEmail} ${role} role`}
+                checked={roles.includes(role)}
+                disabled={roleDisabled}
+                onChange={() => onChange(toggleRole(roles, role))}
+                type="checkbox"
+              />
+              <span>
+                <span>{formatStatusLabel(role)}</span>
+                <small id={`${baseId}-${role}`}>{INSTANCE_ROLE_DESCRIPTIONS[role]}</small>
+              </span>
+            </label>
+          </Fragment>
         );
       })}
     </div>
@@ -6734,7 +6759,24 @@ function connectErrorFromLocation(): string | null {
   return /^[a-z_]{1,40}$/.test(error) ? error : "invalid_request";
 }
 const MAX_WEB_ARCHIVE_BYTES = 10 * 1024 * 1024;
-const ADMIN_ROLE_OPTIONS = ["owner", "admin", "maintainer", "author", "user"];
+const ADMIN_ROLE_OPTIONS = ["owner", "admin", "maintainer", "author", "user"] as const;
+type InstanceRole = (typeof ADMIN_ROLE_OPTIONS)[number];
+
+const INSTANCE_ROLE_GROUPS: Record<InstanceRole, string> = {
+  owner: "Instance control",
+  admin: "Instance control",
+  maintainer: "Review",
+  author: "Authoring",
+  user: "Everyone",
+};
+
+const INSTANCE_ROLE_DESCRIPTIONS: Record<InstanceRole, string> = {
+  owner: "Manage the instance, including owner and admin roles and sharing. Also review, publish, and submit. The last active owner cannot lose this role. Requires MFA.",
+  admin: "Manage users, registration, providers, branding, and audit. Also review, publish, and submit. Cannot change owner or admin roles. Requires MFA.",
+  maintainer: "Review, approve, publish, and manage skills, and submit packages. Requires MFA.",
+  author: "Create drafts and submit packages. Cannot review or administer the instance.",
+  user: "Sign in and use skills shared with you. Cannot submit, review, or administer the instance.",
+};
 
 function readStoredSession(): WebSession | null {
   try {
