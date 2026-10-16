@@ -2722,6 +2722,7 @@ function ReviewDashboard({ client, onOpenSkill, session }: { client: RegistryCli
     const release = { label: "Release", value: `${submission.slug}@${submission.version}` };
     const details = action === "publish"
       ? [
+          release,
           { label: "Skill name", value: submission.title },
           { label: "Version", value: submission.version },
           { label: "Audience", value: visibilityLabel(submission.visibility) },

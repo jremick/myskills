@@ -775,7 +775,7 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
   }
 
   async function commitAppendPolicy() {
-    if (!client.appendOrganizationPolicy) return;
+    if (!client.appendOrganizationPolicy || !pendingAppend || state === "saving" || appendChanges.length === 0) return;
     setState("saving");
     setMessage(null);
     try {
@@ -783,7 +783,7 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
       setState("idle");
       setPendingAppend(false);
       setEditing(false);
-      setMessage(result.activated ? `Policy revision ${result.revision.revisionNumber} was appended and activated.` : `Policy revision ${result.revision.revisionNumber} was appended; the current policy remains unchanged.`);
+      setMessage(!result.created ? `No new policy revision was created; revision ${result.revision.revisionNumber} already exists${result.activated ? " and was activated" : "; the current policy remains unchanged"}.` : result.activated ? `Policy revision ${result.revision.revisionNumber} was appended and activated.` : `Policy revision ${result.revision.revisionNumber} was appended; the current policy remains unchanged.`);
       setReason("");
       onChanged();
     } catch (error) {
@@ -794,6 +794,7 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
 
   function appendPolicy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (state === "saving" || appendChanges.length === 0) return;
     if (!pendingAppend) {
       setPendingAppend(true);
       setMessage("Review this immutable policy revision before it is appended and activated.");
@@ -849,7 +850,7 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
 
   const current = policies.find((revision) => revision.id === detail.currentPolicyRevisionId);
   const currentPolicy = detail.currentPolicy?.policy ?? ORGANIZATION_POLICY_DEFAULTS;
-  const appendChanges = pendingAppend ? changedPolicySettings(currentPolicy, draft) : null;
+  const appendChanges = changedPolicySettings(currentPolicy, draft);
   const activationChanges = pendingActivation ? changedPolicySettings(currentPolicy, pendingActivation.policy) : null;
 
   return (
@@ -906,7 +907,7 @@ function OrganizationPolicyPanel({ client, detail, policies, canManage, onChange
             ))}
           </div>
           <label><span>Revision reason</span><Textarea aria-label="Policy revision reason" disabled={state === "saving"} onChange={(event) => setReason(event.target.value)} placeholder="Why this policy change is needed" value={reason} /></label>
-          {!pendingAppend ? <Button className="shadcn-action-button people-start" disabled={state === "saving"} size="sm" type="submit"><Plus size={15} aria-hidden="true" />Review append and activate</Button> : appendChanges && <div className="control-plane-inline-message people-confirm-strip" role="alert"><span>Confirm this immutable revision. The API will report whether it becomes the current policy immediately.</span><PolicyChangeList changes={appendChanges} /><div className="people-form-actions"><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelAppendPolicy}>Cancel</Button><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" onClick={() => void commitAppendPolicy()}>{state === "saving" ? "Saving…" : "Confirm append and activate"}</Button></div></div>}
+          {!pendingAppend ? <Button className="shadcn-action-button people-start" disabled={state === "saving" || appendChanges.length === 0} size="sm" type="submit"><Plus size={15} aria-hidden="true" />Review append and activate</Button> : appendChanges && <div className="control-plane-inline-message people-confirm-strip" role="alert"><span>Confirm this immutable revision. The API will report whether it becomes the current policy immediately.</span><PolicyChangeList changes={appendChanges} /><div className="people-form-actions"><Button className="shadcn-action-button" disabled={state === "saving"} size="sm" type="button" variant="outline" onClick={cancelAppendPolicy}>Cancel</Button><Button className="shadcn-action-button" disabled={state === "saving" || appendChanges.length === 0} size="sm" type="button" onClick={() => void commitAppendPolicy()}>{state === "saving" ? "Saving…" : "Confirm append and activate"}</Button></div></div>}
         </form>
       )}
       {!canManage && <p className="registry-muted">Only the organization owner can append or activate policy revisions.</p>}

@@ -93,7 +93,7 @@ export function SkillManagePanel({
   async function confirm() {
     if (!record || !pending || busy || locked) return;
     if (pending.action !== "restore" && !reason.trim()) return;
-    if (pending.kind === "skill" && pending.action === "delete" && !skillDeleteMatch(match, { slug: record.slug, title: record.title })) return;
+    if (pending.kind === "skill" && (pending.action === "delete" || pending.action === "archive") && !skillIdentityMatch(match, { slug: record.slug, title: record.title })) return;
     const section = pending.kind;
     setBusy(true);
     setMessage(null);
@@ -148,9 +148,9 @@ export function SkillManagePanel({
     const target = pending.kind === "release" ? releases.find((item) => item.version === pending.version) ?? null : null;
     const reasonId = `${baseId}-reason`;
     const matchId = `${baseId}-match`;
-    const skillDelete = pending.kind === "skill" && pending.action === "delete";
-    const deleteMatched = skillDelete ? skillDeleteMatch(match, { slug: record.slug, title: record.title }) : true;
-    const confirmDisabled = busy || locked || (pending.action !== "restore" && !reason.trim()) || !deleteMatched;
+    const skillDestructive = pending.kind === "skill" && (pending.action === "delete" || pending.action === "archive");
+    const identityMatched = skillDestructive ? skillIdentityMatch(match, { slug: record.slug, title: record.title }) : true;
+    const confirmDisabled = busy || locked || (pending.action !== "restore" && !reason.trim()) || !identityMatched;
     return (
       <section aria-label="Confirm lifecycle change" className="manage-confirm" onKeyDown={onKeyDown}>
         <h4 ref={confirmRef} tabIndex={-1}>{label(pending.action)} {record.slug}{pending.kind === "release" ? ` ${pending.version}` : ""}</h4>
@@ -161,11 +161,11 @@ export function SkillManagePanel({
             {target?.artifact && <div><dt>SHA-256</dt><dd className="registry-mono">{target.artifact.sha256}</dd></div>}
           </dl>
         )}
-        {skillDelete && (
+        {skillDestructive && (
           <label className="manage-reason" htmlFor={matchId}>
             <span>Type the skill slug or name</span>
             <Input aria-describedby={`${baseId}-match-help`} aria-label="Type the skill slug or name" id={matchId} value={match} disabled={busy} onChange={(event) => setMatch(event.target.value)} />
-            <small id={`${baseId}-match-help`}>{skillDeleteHelp(record)}</small>
+            <small id={`${baseId}-match-help`}>{skillIdentityHelp(record)}</small>
           </label>
         )}
         <label className="manage-reason" htmlFor={reasonId}>
@@ -332,16 +332,16 @@ function pendingKey(pending: PendingAction): string {
   return pending.kind === "skill" ? `skill:${pending.action}` : `release:${pending.action}:${pending.version}`;
 }
 
-function isDestructive(action: string): boolean { return action === "delete" || action === "revoke"; }
+function isDestructive(action: string): boolean { return action === "archive" || action === "delete" || action === "revoke"; }
 
 function label(value: string): string { return value.charAt(0).toUpperCase() + value.slice(1); }
 
-function skillDeleteMatch(typed: string, saved: { slug: string; title: string }): boolean {
+function skillIdentityMatch(typed: string, saved: { slug: string; title: string }): boolean {
   const value = typed.trim();
   return value === saved.slug || value === saved.title;
 }
 
-function skillDeleteHelp(saved: { slug: string; title: string }): string {
+function skillIdentityHelp(saved: { slug: string; title: string }): string {
   if (saved.slug === saved.title) return `Type the saved slug or the saved name. Both are ${saved.slug}.`;
   return `Type the saved slug or the saved name. The saved slug is ${saved.slug}. The saved name is ${saved.title}.`;
 }

@@ -824,7 +824,7 @@ test("skill deletion clears the parent detail and its stale export actions", asy
   assert.equal(view.queryByRole("tab", { name: "Manage" }), null);
 });
 
-test("delete skill requires the saved slug or title and stays apart from archive and restore", async () => {
+test("archive and delete skill require the saved slug or title and stay apart from restore", async () => {
   const owner = authUser({ roles: ["owner"], mfaVerified: true });
   setupAuthenticatedDom("http://localhost/skills/release-notes-helper", owner);
   const skill = { ...publicSkill(), access: { canManageSharing: true, reasons: ["owner", "public"] } } as PublicSkill;
@@ -841,16 +841,27 @@ test("delete skill requires the saved slug or title and stays apart from archive
   const restoreSkill = view.getByRole("button", { name: "Restore skill" });
   const archiveSkill = view.getByRole("button", { name: "Archive skill" });
   assert.notEqual(deleteSkill.parentElement, restoreSkill.parentElement);
-  assert.notEqual(deleteSkill.parentElement, archiveSkill.parentElement);
+  assert.equal(deleteSkill.parentElement, archiveSkill.parentElement);
   const danger = view.getByRole("region", { name: "Destructive skill actions" });
   assert.equal(within(danger).getByRole("button", { name: "Delete skill" }), deleteSkill);
   assert.equal(within(danger).queryByRole("button", { name: "Restore skill" }), null);
-  assert.equal(within(danger).queryByRole("button", { name: "Archive skill" }), null);
+  assert.equal(within(danger).getByRole("button", { name: "Archive skill" }), archiveSkill);
 
   fireEvent.click(archiveSkill);
   const archiveConfirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
-  assert.equal(within(archiveConfirm).queryByRole("textbox", { name: "Type the skill slug or name" }), null);
-  fireEvent.click(within(archiveConfirm).getByRole("button", { name: "Cancel" }));
+  const archiveMatch = within(archiveConfirm).getByRole("textbox", { name: "Type the skill slug or name" });
+  const confirmArchive = within(archiveConfirm).getByRole("button", { name: "Confirm archive" }) as HTMLButtonElement;
+  fireEvent.input(within(archiveConfirm).getByRole("textbox", { name: "Lifecycle reason" }), { target: { value: "Archive obsolete skill" } });
+  assert.equal(confirmArchive.disabled, true);
+  fireEvent.input(archiveMatch, { target: { value: "wrong-skill" } });
+  fireEvent.click(confirmArchive);
+  assert.deepEqual(actions, []);
+  fireEvent.input(archiveMatch, { target: { value: "Release Notes Helper" } });
+  assert.equal(confirmArchive.disabled, false);
+  fireEvent.input(archiveMatch, { target: { value: "release-notes-helper" } });
+  fireEvent.click(confirmArchive);
+  await waitFor(() => assert.deepEqual(actions, [{ slug: "release-notes-helper", action: "archive", reason: "Archive obsolete skill" }]));
+  actions.length = 0;
 
   fireEvent.click(deleteSkill);
   const confirm = await view.findByRole("region", { name: "Confirm lifecycle change" });
@@ -2526,7 +2537,7 @@ test("publish confirmation names the skill, version, and audience", async () => 
   assert.equal(detailValue(dialog, "Version"), "0.1.0");
   assert.equal(detailValue(dialog, "Audience"), "Public");
   assert.equal(detailLabel(dialog, "Approved SHA-256"), null);
-  assert.equal(detailLabel(dialog, "Release"), null);
+  assert.equal(detailValue(dialog, "Release"), "release-notes-helper@0.1.0");
   const publish = within(dialog).getByRole("button", { name: "Publish release" }) as HTMLButtonElement;
   const reason = within(dialog).getByLabelText("Reason (required)");
   fireEvent.input(reason, { target: { value: "no" } });
@@ -2538,6 +2549,28 @@ test("publish confirmation names the skill, version, and audience", async () => 
   const reject = await view.findByRole("dialog", { name: "Reject this submission?" });
   assert.equal(detailValue(reject, "Release"), "release-notes-helper@0.1.0");
   assert.equal(detailLabel(reject, "Skill name"), null);
+});
+
+test("publish confirmation distinguishes skills with identical titles", async () => {
+  const maintainer = authUser({ roles: ["maintainer"] });
+  setupAuthenticatedDom("http://localhost/review", maintainer);
+  const base = defaultReviewSubmissions()[0]!;
+  const submissions: ReviewSubmissionSummary[] = [
+    { ...base, allowedActions: ["publish"] },
+    { ...base, id: "submission-2", slug: "other-release-helper", allowedActions: ["publish"] },
+  ];
+  const view = render(<RegistryApp client={mockClient({ user: maintainer, reviewSubmissions: submissions })} />);
+  await view.findByText("Review dashboard");
+  for (const submission of submissions) {
+    const row = view.getAllByRole("button", { name: /Release Notes Helper/ }).find((button) => button.textContent?.includes(submission.slug));
+    assert.ok(row);
+    fireEvent.click(row);
+    fireEvent.click(await view.findByRole("button", { name: "Publish" }));
+    const dialog = await view.findByRole("dialog", { name: "Publish this release?" });
+    assert.equal(detailValue(dialog, "Skill name"), base.title);
+    assert.equal(detailValue(dialog, "Release"), `${submission.slug}@${submission.version}`);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+  }
 });
 
 test("publish confirmation shows the approved hash after approval stores one", async () => {
@@ -2555,7 +2588,7 @@ test("publish confirmation shows the approved hash after approval stores one", a
   const dialog = await view.findByRole("dialog", { name: "Publish this release?" });
   assert.equal(detailValue(dialog, "Approved SHA-256"), hash);
   assert.equal(detailValue(dialog, "Skill name"), "Release Notes Helper");
-  assert.equal(detailLabel(dialog, "Release"), null);
+  assert.equal(detailValue(dialog, "Release"), "release-notes-helper@0.1.0");
 });
 
 test("author sessions can submit a package archive without rendering package content", async () => {

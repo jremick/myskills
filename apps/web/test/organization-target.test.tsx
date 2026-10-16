@@ -57,6 +57,7 @@ test("organization management loads a scoped detail and keeps member/policy acti
   await waitFor(() => assert.equal(calls.includes("role:user-2:admin"), true));
 
   fireEvent.click(view.getByRole("button", { name: "Change policy" }));
+  fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
   fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
   fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
   await waitFor(() => assert.equal(calls.includes("append-policy"), true));
@@ -143,6 +144,7 @@ test("organization policy controls stay disabled while a revision is being saved
   const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByRole("heading", { name: "Acme Skills" });
   fireEvent.click(view.getByRole("button", { name: "Change policy" }));
+  fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
   fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
   fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
   await waitFor(() => assert.ok(finishSave));
@@ -151,6 +153,30 @@ test("organization policy controls stay disabled while a revision is being saved
   } finally { finishSave?.(); }
   await view.findByText("Policy revision 1 was appended and activated.");
 });
+
+for (const activated of [false, true]) {
+  test(`policy append reports an existing revision honestly (activated: ${activated})`, async () => {
+    const organization = sampleOrganization();
+    const client = {
+      async listOrganizations() { return [organization]; },
+      async listOrganizationPendingInvitations() { return []; },
+      async getOrganization() { return organization; },
+      async listOrganizationMembers() { return []; },
+      async listOrganizationInvitations() { return []; },
+      async listOrganizationPolicies() { return [samplePolicyRevision()]; },
+      async listOrganizationTeams() { return []; },
+      async appendOrganizationPolicy() { return { revision: samplePolicyRevision(), created: false, activated }; },
+    } as unknown as RegistryClient;
+    const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
+    await view.findByRole("heading", { name: "Acme Skills" });
+    fireEvent.click(view.getByRole("button", { name: "Change policy" }));
+    fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
+    fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
+    fireEvent.click(await view.findByRole("button", { name: "Confirm append and activate" }));
+    await view.findByText(`No new policy revision was created; revision 1 already exists${activated ? " and was activated" : "; the current policy remains unchanged"}.`);
+    assert.equal(view.queryByText(/was appended/), null);
+  });
+}
 
 test("policy append and activate list only the settings that changed", async () => {
   const current = samplePolicy();
@@ -180,13 +206,11 @@ test("policy append and activate list only the settings that changed", async () 
   const view = render(<OrganizationsDashboard client={client} session={{ user: { id: "user-1", email: "owner@example.com" } }} />);
   await view.findByRole("heading", { name: "Acme Skills" });
   fireEvent.click(view.getByRole("button", { name: "Change policy" }));
-  fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
-  const unchanged = policyAlert(view, "Confirm append and activate");
-  const unchangedCopy = "No settings differ from the current policy.";
-  assert.equal(within(unchanged).getByText(unchangedCopy).textContent, unchangedCopy);
-  assert.equal(within(unchanged).queryByRole("group", { name: "Changed policy settings" }), null);
-  assert.equal((within(unchanged).getByRole("button", { name: "Confirm append and activate" }) as HTMLButtonElement).disabled, false);
-  fireEvent.click(within(unchanged).getByRole("button", { name: "Cancel" }));
+  const review = view.getByRole("button", { name: "Review append and activate" }) as HTMLButtonElement;
+  assert.equal(review.disabled, true);
+  fireEvent.click(review);
+  fireEvent.submit(view.container.querySelector(".organization-policy-form")!);
+  assert.equal(view.queryByRole("button", { name: "Confirm append and activate" }), null);
 
   fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
   fireEvent.click(view.getByRole("button", { name: "Review append and activate" }));
@@ -197,6 +221,12 @@ test("policy append and activate list only the settings that changed", async () 
   assert.equal(within(append).queryByText("Let members create child teams"), null);
   assert.equal(within(append).queryByText("Teams per organization"), null);
   assert.equal((within(append).getByRole("button", { name: "Confirm append and activate" }) as HTMLButtonElement).disabled, false);
+
+  fireEvent.click(view.getByRole("checkbox", { name: "Enable organization skill sharing" }));
+  const confirmAppend = within(append).getByRole("button", { name: "Confirm append and activate" }) as HTMLButtonElement;
+  assert.equal(confirmAppend.disabled, true);
+  assert.ok(within(append).getByText("No settings differ from the current policy."));
+  fireEvent.click(confirmAppend);
 
   fireEvent.click(view.getByRole("button", { name: "Activate" }));
   const activate = policyAlert(view, "Confirm activate");
