@@ -15,7 +15,7 @@ export interface DraftRouteHelpers {
   requireScope(context: AuthContext, scope: ApiTokenScope): void;
   requiresMfaForRole(context: AuthContext): boolean;
 }
-const BODY_LIMIT = 14 * 1024 * 1024;
+const BODY_LIMIT = 40 * 1024 * 1024;
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i;
 
 export function registerDraftRoutes(app: FastifyInstance, options: DraftRouteOptions, helpers: DraftRouteHelpers) {

@@ -324,8 +324,8 @@ function checkImplementationInvariants() {
   }
 
   const nginx = readText("deploy/nginx.railway.conf.template") ?? "";
-  if (!nginx.includes("client_max_body_size 14m;")) {
-    failures.push("deploy/nginx.railway.conf.template must accept the API's bounded 14 MiB submission request envelope.");
+  if (!nginx.includes("client_max_body_size 40m;")) {
+    failures.push("deploy/nginx.railway.conf.template must accept the API's bounded 40 MiB submission request envelope.");
   }
 
   const productionCompose = readText("docker-compose.production.example.yml") ?? "";

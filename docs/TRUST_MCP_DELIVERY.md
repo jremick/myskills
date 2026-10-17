@@ -58,7 +58,7 @@ Legacy DB payload fallback is limited to missing-object errors. Storage access
 denials, timeouts, malformed bytes and provider failures fail closed. CLI requests
 reject redirects and stream bounded bytes before hashing and strict UTF-8
 decoding. Artifact metadata must declare a valid digest and a safe integer byte
-size within the existing 10 MiB object limit. Device responses have a 16 KiB limit.
+size within the 40 MiB object limit. Device responses have a 16 KiB limit.
 
 `postgres-artifact-delivery.pgtest.ts` is registered through `test:postgres`.
 It prepares real database tests for stale credential SELECT/usage UPDATE races,

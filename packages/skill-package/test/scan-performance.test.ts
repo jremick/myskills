@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { MAX_SCAN_TEXT_LENGTH } from "../src/scan.js";
 
 for (const name of [
   "benign",
@@ -14,6 +15,8 @@ for (const name of [
   "download-positive",
   "decode-positive",
   "url-positive",
+  "negated-transfer",
+  "service-auth-prose",
 ]) {
   test(`bounds scanner work for ${name} through the package text limit`, (t) => {
     // A test-runner timeout cannot interrupt a synchronous regex. Kill a child
@@ -33,7 +36,7 @@ for (const name of [
     assert.equal(result.signal, null, `${name}: ${result.signal}`);
     assert.equal(result.status, 0, result.stderr);
     const timings = JSON.parse(result.stdout) as Array<{ length: number; elapsedMs: number }>;
-    assert.deepEqual(timings.map((timing) => timing.length), [8_192, 131_072, 1_048_576]);
+    assert.deepEqual(timings.map((timing) => timing.length), [8_192, 131_072, MAX_SCAN_TEXT_LENGTH]);
     t.diagnostic(`${name}: ${JSON.stringify(timings)}`);
   });
 }

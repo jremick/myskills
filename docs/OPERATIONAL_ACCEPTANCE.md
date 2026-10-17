@@ -172,7 +172,7 @@ the exported snapshot, and every restored object is read back and verified.
 SHA-256 authenticates the copied archive and artifact bytes. The per-table MD5
 fingerprint is an equality check, not a cryptographic signature. The bounded
 rehearsal supports 10,000 artifacts and one million rows per table. An object
-must fit the application's 14 MiB artifact limit.
+must fit the application's 40 MiB artifact limit.
 
 Backups contain private application data and credential hashes. Directories use
 mode `0700`, files use `0600`, and backup contents are never added to the checkout.

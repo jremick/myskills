@@ -11,7 +11,7 @@ import pg from "pg";
 import { CreateBucketCommand, GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-export const limits = Object.freeze({ artifactBytes: 14 * 1024 * 1024, artifacts: 10_000, rows: 1_000_000,
+export const limits = Object.freeze({ artifactBytes: 40 * 1024 * 1024, artifacts: 10_000, rows: 1_000_000,
   tables: 256, manifestBytes: 8 * 1024 * 1024, ioMs: 30_000, sqlMs: 180_000, connectMs: 10_000 });
 export const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 export const required = (env, key) => { const value = env[key]?.trim(); if (!value) throw new Error(`${key} is required.`); return value; };

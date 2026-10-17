@@ -13,6 +13,23 @@ function client(registryIdentity: string, get: DraftClient["get"]): DraftClient 
   return { registryIdentity, list: async () => ({ drafts: [] }), get, history: async () => ({ revisions: [{ ...head, title: "Private history canary", fileCount: 1, textBytes: 22 }] }) } as unknown as DraftClient;
 }
 
+test("folder import retains PNG bytes as base64 for API validation", async () => {
+  const content = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII=";
+  let imported: unknown;
+  const api = { ...client("https://registry.example", async () => ({ draft: head })),
+    preview: async (input: unknown) => { imported = input; throw new Error("Preview captured"); },
+  } as DraftClient;
+  const view = render(<DraftWorkspace {...props} api={api} />);
+  await view.findByDisplayValue("Private content canary");
+  const bytes = Uint8Array.from(Buffer.from(content, "base64"));
+  fireEvent.change(view.getByLabelText("Package folder"), { target: { files: [{ name: "logo.png", size: bytes.length, webkitRelativePath: "assets/logo.png", arrayBuffer: async () => bytes.buffer }] } });
+  const list = await view.findByRole("list", { name: "Selected file inclusion" });
+  assert.equal(within(list).getByRole("checkbox").hasAttribute("disabled"), false);
+  fireEvent.click(view.getByRole("button", { name: "Preview import" }));
+  await view.findByText("Preview captured");
+  assert.deepEqual(imported, { files: [{ path: "assets/logo.png", content }] });
+});
+
 test("draft submission action status and receipt heading remain distinct while saved history is compared", async () => {
   const saved = { ...head, revision: 2, files: [{ path: "SKILL.md", content: "Current saved content" }] };
   const submission: DraftSubmission = { id: "submission-id", slug: "helper", version: "0.1.1", artifactSha256: "a".repeat(64),

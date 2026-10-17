@@ -1,5 +1,6 @@
 import { PackageEvaluationEvidence } from "@/components/registry/PackageEvaluationEvidence";
 import { SkillPreview } from "@/components/registry/SkillPreview";
+import { SkillLogo } from "./components/registry/SkillLogo.js";
 import { RecoveryGuidancePanel } from "./components/operations/RecoveryGuidancePanel.js";
 import { APPLICATION_SCOPES } from "@myskills-app/core";
 import { DeviceAuthorizePage } from "./components/DeviceAuthorizePage.js";
@@ -1552,7 +1553,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
     return (
       <div className="registry-skill-pane">
         <header className="registry-inspector-head">
-          <span className="registry-tile" data-size="32" data-tone={tileTone(identity.slug)} aria-hidden="true" />
+          <SkillLogo src={workspaceVersion ? registryClient.getSkillLogoUrl?.(identity.slug, workspaceVersion) : undefined} size="32" tone={tileTone(identity.slug)} />
           <div className="registry-inspector-title">
             <h2 ref={inspectorTitleRef} tabIndex={-1}>{identity.title}</h2>
             <p className="registry-ref"><code>{identity.slug}</code></p>
@@ -1721,6 +1722,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
           ) : bundleCatalog && workspaceScope === "all" ? (
             <BundleWorkspace
               api={bundleCatalog}
+              skillLogoUrl={registryClient.getSkillLogoUrl}
               bundleHref={(bundleId) => registryUrl(null, query, platform, null, { view: catalogView, bundle: bundleId })}
               canCreate={canUseSubmit}
               headerControls={scopeControl}
@@ -1812,7 +1814,7 @@ function RegistryContent({ client: registryClient }: { client: RegistryClient })
                               key={skill.slug}
                               onClick={(event) => handleCallbackLink(event, () => selectSkill(skill.slug))}
                             >
-                              <span className="registry-tile" data-tone={tileTone(skill.slug)} aria-hidden="true" />
+                              <SkillLogo src={skill.latestVersion ? registryClient.getSkillLogoUrl?.(skill.slug, skill.latestVersion) : undefined} tone={tileTone(skill.slug)} />
                               <span className="registry-row-text">
                                 <span className="registry-row-title">{skill.title}</span>
                                 <span className="registry-row-meta">
@@ -2444,7 +2446,7 @@ function SubmitDashboard({ client, onOpenSkill, session, url, onDraftNavigate, o
                 return (
                   <li className="submit-item" key={submission.id}>
                     <div className="registry-row submission-row">
-                      <span className="registry-tile" data-tone={tileTone(submission.slug)} aria-hidden="true" />
+                      <SkillLogo src={client.getSkillLogoUrl?.(submission.slug, submission.version)} tone={tileTone(submission.slug)} />
                       <span className="registry-row-text">
                         <span className="registry-row-title" id={titleId}>{submission.title}</span>
                         <span className="registry-row-meta">
@@ -2842,7 +2844,7 @@ function ReviewDashboard({ client, onOpenSkill, session }: { client: RegistryCli
         type="button"
         onClick={() => openSubmission(submission.id)}
       >
-        <span className="registry-tile" data-tone={tileTone(submission.slug)} aria-hidden="true" />
+        <SkillLogo src={client.getSkillLogoUrl?.(submission.slug, submission.version)} tone={tileTone(submission.slug)} />
         <span className="registry-row-text">
           <span className="registry-row-title">{submission.title}</span>
           <span className="registry-row-meta">
@@ -2872,7 +2874,7 @@ function ReviewDashboard({ client, onOpenSkill, session }: { client: RegistryCli
     return (
       <>
         <header className="registry-inspector-head">
-          <span className="registry-tile" data-size="32" data-tone={tileTone(submission.slug)} aria-hidden="true" />
+          <SkillLogo src={client.getSkillLogoUrl?.(submission.slug, submission.version)} size="32" tone={tileTone(submission.slug)} />
           <div className="registry-inspector-title">
             <h2 ref={titleRef} tabIndex={-1}>{submission.title}</h2>
             <p className="registry-ref">

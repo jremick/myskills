@@ -18,10 +18,10 @@
  *       SKILL.md would not.
  * N02 S Packaged file digests describe the actual bytes. The runtime SKILL.md is generated and
  *       claims no Git blob. The preserved original is the upstream blob. The import manifest
- *       (importer /2) maps the upstream SKILL.md to its preserved archive path and carries the
+ *       (importer /3) maps the upstream SKILL.md to its preserved archive path and carries the
  *       normalize-runtime-name transform with both digests. sourceDigest stays upstream-derived.
  * N03 S Import, served bundles, private self-review and adoption keep the exact held bytes. The
- *       immutable provenance row records importer /2, the preserved path and the transform.
+ *       immutable provenance row records importer /3, the preserved path and the transform.
  * N04 S A double-quoted name keeps its quoting style. A single-quoted description with ": " is
  *       accepted.
  * N05 S A frontmatter without `name` gets one inserted after the opening delimiter. The source
@@ -116,6 +116,7 @@ const PLANNER_V1 = [
 const PLANNER_V2 = PLANNER_V1.replace("before planning.", "first, then plan in dated steps.");
 const GUIDE_V1 = "# Guide\r\n\r\nKeep plans short.\r\n";
 const GUIDE_V2 = "# Guide\r\n\r\nKeep plans short and dated.\r\n";
+const LOGO = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII=", "base64");
 const QUOTED = "---\nname: \"quoted-helper\"\ndescription: 'Answer: with care.'\n---\n\n# Quoted\n";
 const UNNAMED = "---\ndescription: Summarize meeting notes.\nlicense: MIT\n---\n\n# Notes\n";
 const DUPLICATE = "---\nname: dup-one\nname: dup-two\ndescription: Duplicate names.\n---\n\n# Duplicate\n";
@@ -149,6 +150,7 @@ test("library native install journey: normalized runtime name, preserved origina
     owner: "acme",
     name: "native-skills",
     license: "MIT",
+    binaryFiles: { "skills/planner/assets/logo.png": LOGO },
     files: {
       LICENSE: MIT,
       "skills/planner/SKILL.md": PLANNER_V1,
@@ -179,8 +181,8 @@ test("library native install journey: normalized runtime name, preserved origina
       ...refs("skills/many-at", 495),
       "skills/many-over/SKILL.md": "---\nname: many-over\ndescription: One file over the limit.\n---\n\n# Over\n",
       ...refs("skills/many-over", 496),
-      "skills/big/SKILL.md": `---\nname: big\ndescription: Large instructions.\n---\n\n${"a".repeat(400_000)}\n`,
-      "skills/big/data.md": "b".repeat(400_000),
+      "skills/big/SKILL.md": `---\nname: big\ndescription: Large instructions.\n---\n\n${"a".repeat(2_000_000)}\n`,
+      "skills/big/data.md": "b".repeat(2_000_000),
     },
   });
 
@@ -277,6 +279,7 @@ test("library native install journey: normalized runtime name, preserved origina
   assert.equal(plannerFiles.get(ORIGINAL_PATH)!.content, PLANNER_V1);
   assert.equal(plannerFiles.get("references/guide.md")!.content, GUIDE_V1);
   assert.equal(plannerFiles.get("LICENSE")!.content, MIT);
+  assert.deepEqual(Buffer.from(plannerFiles.get("assets/logo.png")!.content, "base64"), LOGO);
   assert.deepEqual([...plannerFiles.keys()].filter((path) => path.split("/").at(-1) === "SKILL.md"), ["SKILL.md"]);
   assert.doesNotThrow(() => validateCodexSkill(packageFiles(planner), plannerSlug));
   assert.throws(() => validateCodexSkill([{ path: "SKILL.md", content: PLANNER_V1 }], plannerSlug), /match the package slug/);
@@ -285,8 +288,9 @@ test("library native install journey: normalized runtime name, preserved origina
 
   // N02: digests describe the packaged bytes; the original is the upstream blob; sourceDigest is upstream-derived.
   for (const file of planner.files) {
-    assert.equal(file.sha256, sha256(file.content), file.path);
-    assert.equal(file.bytes, Buffer.byteLength(file.content), file.path);
+    const bytes = Buffer.from(file.content, file.path === "assets/logo.png" ? "base64" : "utf8");
+    assert.equal(file.sha256, sha256(bytes), file.path);
+    assert.equal(file.bytes, bytes.length, file.path);
   }
   const plannerOriginalBlob = gitBlobSha(Buffer.from(PLANNER_V1, "utf8"));
   const skillFile = plannerFiles.get("SKILL.md")!;
@@ -306,7 +310,7 @@ test("library native install journey: normalized runtime name, preserved origina
   assert.deepEqual(normalization(planner), expectedTransformV1);
   assert.deepEqual([planner.mapping.slug, planner.mapping.nativeName, planner.lineage.nativeName], [plannerSlug, "planner", "planner"]);
   const importManifest = JSON.parse(plannerFiles.get("myskills-import.json")!.content);
-  assert.equal(importManifest.importer, "myskills-library-importer/2");
+  assert.equal(importManifest.importer, "myskills-library-importer/3");
   assert.equal(importManifest.nativeName, "planner");
   assert.equal(importManifest.mapping.slug, plannerSlug);
   assert.equal(importManifest.files.some((file: Json) => file.path === "SKILL.md"), false, "no provenance entry may claim the runtime SKILL.md is the upstream blob");
@@ -321,6 +325,7 @@ test("library native install journey: normalized runtime name, preserved origina
   assert.deepEqual(importManifest.transforms.find((transform: Json) => transform.kind === "normalize-runtime-name"), expectedTransformV1);
   const upstreamIdentity = [["LICENSE", MIT], ["SKILL.md", PLANNER_V1], ["references/guide.md", GUIDE_V1]]
     .map(([path, text]) => [path, gitBlobSha(Buffer.from(text!, "utf8"))])
+    .concat([["assets/logo.png", gitBlobSha(LOGO)]])
     .sort(([left], [right]) => left!.localeCompare(right!));
   assert.equal(planner.sourceDigest, sha256(JSON.stringify(upstreamIdentity)));
   const independentDigest = sha256(JSON.stringify({ files: packageFiles(planner).sort((left: Json, right: Json) => left.path.localeCompare(right.path)) }));
@@ -429,7 +434,7 @@ test("library native install journey: normalized runtime name, preserved origina
   assert.deepEqual([limitRoots.get("skills/many-over")!.fileCount, limitRoots.get("skills/many-at")!.fileCount], [497, 496]);
   assert.ok(limitRoots.get("skills/many-over")!.blockers.some((finding: Json) => finding.code === "limit-exceeded"));
   assert.equal(limitRoots.get("skills/many-at")!.blockers.length, 0);
-  assert.ok(limitRoots.get("skills/big")!.byteCount <= 1_048_576);
+  assert.ok(limitRoots.get("skills/big")!.byteCount <= 5 * 1024 * 1024);
   assert.ok(limitRoots.get("skills/big")!.blockers.some((finding: Json) => finding.code === "limit-exceeded"));
   const limitCandidates = await preview(limitsEntry.id, limitsDiscovery.snapshot.id, ["skills/many-over", "skills/many-at", "skills/big"]);
   await assertBlocked(limitCandidates.get("skills/many-over")!, "limit-exceeded");
@@ -457,6 +462,7 @@ test("library native install journey: normalized runtime name, preserved origina
   const bundleFiles = JSON.parse(Buffer.from(ownerBundle.rawBody).toString("utf8")).files as Array<{ path: string; content: string }>;
   assert.doesNotThrow(() => validateCodexSkill(bundleFiles, plannerSlug));
   assert.equal(bundleFiles.find((file) => file.path === ORIGINAL_PATH)?.content, PLANNER_V1);
+  assert.deepEqual(Buffer.from(bundleFiles.find(file => file.path === "assets/logo.png")!.content, "base64"), LOGO);
   const selfReviewed = expectOk(await call("POST", `/v1/library-candidates/${planner.id}/self-review`, alice, { artifactSha256: planner.packageDigest }));
   assert.equal(selfReviewed.release.attestation, "private-self-reviewed");
   const releaseBundle = await call("GET", `/v1/skills/${plannerSlug}/releases/0.0.1/bundle?platform=codex`, alice);
@@ -467,7 +473,7 @@ test("library native install journey: normalized runtime name, preserved origina
     "SELECT importer_version, native_name, source_digest, package_digest, files, notices, transforms FROM skill_release_provenance WHERE skill_version_id = $1",
     [imported.submission.id],
   )).rows[0];
-  assert.equal(provenance.importer_version, "myskills-library-importer/2");
+  assert.equal(provenance.importer_version, "myskills-library-importer/3");
   assert.deepEqual([provenance.native_name, provenance.source_digest, provenance.package_digest], ["planner", planner.sourceDigest, planner.packageDigest]);
   assert.equal(provenance.files.some((file: Json) => file.path === "SKILL.md"), false);
   assert.deepEqual(provenance.files.find((file: Json) => file.sourcePath === "skills/planner/SKILL.md"), importManifest.files.find((file: Json) => file.sourcePath === "skills/planner/SKILL.md"));
@@ -515,6 +521,7 @@ test("library native install journey: normalized runtime name, preserved origina
   assert.ok(await diskEquals(ORIGINAL_PATH, PLANNER_V1), "installed original keeps CRLF and comments");
   assert.ok(await diskEquals("references/guide.md", GUIDE_V1));
   assert.ok(await diskEquals("LICENSE", MIT));
+  assert.deepEqual(await readFile(join(installedDir, "assets/logo.png")), LOGO);
   assert.deepEqual((await readdir(skillsRoot)).filter((name) => name !== ".myskills-app"), [plannerSlug]);
   assert.deepEqual(await skillFilesUnder(installedDir), [join(installedDir, "SKILL.md")]);
   const firstObservation = await observe("codex observe --upload after install", true);
@@ -573,6 +580,7 @@ test("library native install journey: normalized runtime name, preserved origina
   assert.ok(await diskEquals("SKILL.md", runtimeV2));
   assert.ok(await diskEquals(ORIGINAL_PATH, PLANNER_V2));
   assert.ok(await diskEquals("references/guide.md", GUIDE_V2));
+  assert.deepEqual(await readFile(join(installedDir, "assets/logo.png")), LOGO);
   assert.deepEqual(await skillFilesUnder(installedDir), [join(installedDir, "SKILL.md")]);
   const secondObservation = await observe("codex observe --upload after update", true);
   assert.deepEqual(secondObservation.observation.skills.map((skill: Json) => [skill.slug, skill.version, skill.digest]), [[plannerSlug, "0.0.2", plannerV2.packageDigest]]);
@@ -584,6 +592,7 @@ test("library native install journey: normalized runtime name, preserved origina
   assert.ok(await diskEquals("SKILL.md", runtimeV1));
   assert.ok(await diskEquals(ORIGINAL_PATH, PLANNER_V1));
   assert.ok(await diskEquals("references/guide.md", GUIDE_V1));
+  assert.deepEqual(await readFile(join(installedDir, "assets/logo.png")), LOGO);
   const listed = JSON.parse(await expectCli("list after rollback", ["list", "--workspace", workspace, "--json"])).installations as Json[];
   assert.deepEqual(listed.map((row) => [row.slug, row.version, row.artifact.sha256, row.libraryEntryId]), [[plannerSlug, "0.0.1", planner.packageDigest, skillEntryId]]);
   const rolledBack = await observe("codex observe --upload after rollback", true);

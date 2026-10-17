@@ -437,7 +437,7 @@ test("library first-release journey: import, self-review, curation, tracking and
   assert.equal(files.get("LICENSE")!.content, AGENT_SKILLS_LICENSE);
   assert.equal(files.get("LICENSE")!.origin, "repository-notice");
   const importManifest = JSON.parse(files.get("myskills-import.json")!.content);
-  assert.equal(importManifest.importer, "myskills-library-importer/2");
+  assert.equal(importManifest.importer, "myskills-library-importer/3");
   assert.equal(importManifest.source.repositoryId, "424242");
   assert.equal(importManifest.source.commit, discovery.snapshot.commit);
   assert.equal(importManifest.source.path, "skills/ce-plan");

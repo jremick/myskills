@@ -1016,7 +1016,7 @@ export const targetSkillOperations = pgTable("target_skill_operations", {
   check("target_skill_operations_state_check", sql`${table.state} IN ('queued', 'claimed', 'applying', 'verifying', 'succeeded', 'failed', 'cancelled', 'expired')`),
   check("target_skill_operations_digest_check", sql`${table.artifactSha256} ~ '^[0-9a-f]{64}$' AND ${table.planDigest} ~ '^[0-9a-f]{64}$'`),
   check("target_skill_operations_version_check", sql`${table.toVersion} ~ '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$' AND (${table.fromVersion} IS NULL OR ${table.fromVersion} ~ '^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$')`),
-  check("target_skill_operations_artifact_check", sql`${table.artifactByteSize} BETWEEN 1 AND 14680064 AND length(${table.artifactContentType}) BETWEEN 1 AND 120 AND ${table.artifactContentType} !~ '[[:cntrl:]]'`),
+  check("target_skill_operations_artifact_check", sql`${table.artifactByteSize} BETWEEN 1 AND 41943040 AND length(${table.artifactContentType}) BETWEEN 1 AND 120 AND ${table.artifactContentType} !~ '[[:cntrl:]]'`),
   check("target_skill_operations_platform_check", sql`${table.platform} ~ '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'`),
   check("target_skill_operations_fencing_check", sql`${table.fencingToken} BETWEEN 0 AND 1000000000`),
   check("target_skill_operations_idempotency_check", sql`${table.idempotencyKey} ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'`),

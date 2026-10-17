@@ -416,7 +416,7 @@ API proxy behavior remain unchanged. Final staging and production confirmed
 The web build must receive `VITE_API_BASE_URL=/api` so browser auth and registry requests stay same-origin on `myskills.sh`.
 The web runtime must receive an `API_PROXY_TARGET` that resolves to the API in the same environment. Either a verified private-network upstream or the verified public API URL is supported. Production currently uses `https://api.myskills.sh`; staging uses its own private upstream. Nginx forwards `/api/*` so browser requests remain same-origin. Preserve the verified route during rollout unless an upstream change is separately planned and checked.
 The API must receive `APP_BASE_URL=https://myskills.sh`, `ALLOWED_WEB_ORIGINS=https://myskills.sh,https://www.myskills.sh`, and an address-aware `TRUST_PROXY` value so auth rate limits use the forwarded client IP from Railway/nginx. Railway's current proxy guidance uses private ranges plus `100.0.0.0/8`; re-check that guidance when the platform topology changes.
-The Railway nginx template sets `client_max_body_size 14m` so valid bounded package uploads reach the API; do not remove it or fall back to nginx's 1 MiB default.
+The Railway nginx template sets `client_max_body_size 40m` so valid bounded package uploads reach the API; do not remove it or fall back to nginx's 1 MiB default.
 
 ## Required Web Variables
 

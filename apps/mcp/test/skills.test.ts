@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { MAX_PACKAGE_TEXT_BYTES, parseSkillManifest, validatePackageFiles } from "@myskills-app/skill-package";
 import { createNativeSkillsHandlers, NATIVE_SKILL_PAGE_BYTES } from "../src/skills.js";
 import { NATIVE_API_METADATA_BYTES, type FetchLike } from "../src/api-client.js";
@@ -12,6 +13,47 @@ const unavailable = (error: unknown) => {
   assert.equal(String(error).includes("Résumé"), false);
   return true;
 };
+
+test("native image resources and file tools return decoded-byte metadata and explicit binary content", async () => {
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII=", "base64");
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 2, 0xff, 0xd9]);
+  const webp = Buffer.alloc(24);
+  webp.write("RIFF"); webp.writeUInt32LE(16, 4); webp.write("WEBPVP8 ", 8); webp.writeUInt32LE(4, 16);
+  const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1z"/></svg>');
+  const images = [
+    { path: "assets/logo.png", bytes: png, mimeType: "image/png" },
+    { path: "assets/photo.JPG", bytes: jpeg, mimeType: "image/jpeg" },
+    { path: "assets/preview.webp", bytes: webp, mimeType: "image/webp" },
+    { path: "assets/vector.svg", bytes: svg, mimeType: "image/svg+xml" },
+  ];
+  const fixture = nativeFixture({ extra: images.map(image => ({ path: image.path, content: image.bytes.toString(image.mimeType === "image/svg+xml" ? "utf8" : "base64") })) });
+  const handlers = createNativeSkillsHandlers({ token, fetchImpl: fixture.fetchImpl });
+  const skill = (await handlers.list()).skills[0];
+  assert.ok(skill);
+  for (const image of images) {
+    const uri = skill.uri.replace(/SKILL.md$/, image.path);
+    const sha256 = createHash("sha256").update(image.bytes).digest("hex");
+    const binary = image.mimeType !== "image/svg+xml";
+    const content = image.bytes.toString(binary ? "base64" : "utf8");
+    assert.deepEqual(skill.resources.find(resource => resource.uri === uri), { uri, digest: `sha256:${sha256}`, size: image.bytes.length });
+    assert.deepEqual((await handlers.read({ uri })).contents, [{ uri, mimeType: image.mimeType, ...(binary ? { blob: content } : { text: content }) }]);
+    const result = await handlers.readFile({ slug: fixture.skill.slug, version: fixture.release.version, path: image.path });
+    assert.deepEqual(result.file, { path: image.path, sha256, size: image.bytes.length, mimeType: image.mimeType });
+    assert.deepEqual(result.files.find(file => file.path === image.path), { path: image.path, sha256, size: image.bytes.length });
+    assert.equal(result.content, content);
+    assert.equal("contentEncoding" in result ? result.contentEncoding : undefined, binary ? "base64" : undefined);
+  }
+  const text = await handlers.readFile({ slug: fixture.skill.slug, version: fixture.release.version, path: "references/café.md" });
+  assert.equal("contentEncoding" in text, false);
+  assert.equal(text.content, "Résumé — 你好\n");
+});
+
+test("native image delivery rejects image bytes that disagree with the asset extension", async () => {
+  const fixture = nativeFixture({ extra: [{ path: "assets/logo.png", content: Buffer.from("not an image").toString("base64") }] });
+  const handlers = createNativeSkillsHandlers({ token, fetchImpl: fixture.fetchImpl });
+  assert.deepEqual((await handlers.list()).skills, []);
+  await assert.rejects(handlers.readFile({ slug: fixture.skill.slug, version: fixture.release.version, path: "assets/logo.png" }), unavailable);
+});
 
 test("Skills return complete private manifests and preserve BOM, YAML fields and exact UTF-8 bytes", async () => {
   const fixture = nativeFixture();
@@ -278,7 +320,7 @@ test("Native delivery rejects invalid files, UTF-8 strings and package limits", 
     [{ path: "skill.md", content: "case collision" }],
     [{ path: "invalid.txt", content: "\ud800" }],
     [{ path: "invalid.txt", content: "NUL\0" }],
-    [{ path: "large.txt", content: "x".repeat(1024 * 1024) }],
+    [{ path: "large.txt", content: "x".repeat(MAX_PACKAGE_TEXT_BYTES) }],
     Array.from({ length: 500 }, (_, index) => ({ path: `extra-${index}.txt`, content: "x" })),
   ]) {
     const fixture = nativeFixture({ extra });

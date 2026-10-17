@@ -29,6 +29,7 @@ export interface BundleWorkspaceProps {
   onViewChange: (view: RegistryView) => void;
   selection: Selection;
   skillHref: (slug: string) => string;
+  skillLogoUrl?: (slug: string, version: string) => string;
   bundleHref: (id: string) => string;
   onSelectSkill: (slug: string) => void;
   onSelectBundle: (id: string) => void;
@@ -181,6 +182,7 @@ export function BundleWorkspace(props: BundleWorkspaceProps) {
     onRetryMembers: members.retry,
     onRefreshCatalog: catalog.reload,
     skillHref: props.skillHref,
+    skillLogoUrl: props.skillLogoUrl,
     bundleHref: props.bundleHref,
     onOpenSkill: (slug, from) => { noteOrigin(from); props.onSelectSkill(slug); },
     onOpenBundle: (id, from) => { noteOrigin(from); props.onSelectBundle(id); },
@@ -210,6 +212,7 @@ export function BundleWorkspace(props: BundleWorkspaceProps) {
       saveRef={(element) => { saveButton.current = element; }}
       savedMessage={saved?.bundleId === selection.id ? saved.message : null}
       skillHref={props.skillHref}
+      skillLogoUrl={props.skillLogoUrl}
     />
   ) : selection?.kind === "skill" ? (
     <aside aria-label="Selected skill detail" className="bundle-inspector-panel is-skill registry-inspector">

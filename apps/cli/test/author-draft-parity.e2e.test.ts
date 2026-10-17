@@ -60,13 +60,20 @@ test("CLI drafts preserve files, source identity, exact revisions, release metad
   assert.deepEqual(f.requests.at(-1)?.body, { expectedRevision: 7 });
 });
 
+test("CLI draft intake forwards five MiB text despite worst-case JSON escaping", async (t) => {
+  const f = await fixture(t);
+  const body = { title: "Five MiB", files: [{ path: "SKILL.md", content: "\u0001".repeat(5 * 1024 * 1024) }] };
+  await f.ok(["drafts", "create", "--input", await f.input("large-escaped", body)]);
+  assert.deepEqual(f.requests.at(-1), { method: "POST", url: "/v1/drafts", body });
+});
+
 test("CLI drafts reject invented fields, malformed revisions and unsafe paths before HTTP; API denial stays safe", async (t) => {
   const f = await fixture(t);
   for (const body of [
     { title: "One", files: [], owner: { type: "team", id: "other" } },
     { title: "One", files: [{ path: "SKILL.md", content: "text", encoding: "base64" }] },
     { title: "One", files: [{ path: "../outside", content: "text" }] },
-    { title: "One", files: [{ path: "SKILL.md", content: "é".repeat(600_000) }] },
+    { title: "One", files: [{ path: "SKILL.md", content: "é".repeat(5 * 1024 * 1024 / 2 + 1) }] },
     { source: { kind: "release", slug: "workflow", version: "1.0.0", artifactSha256: "invented" } },
     { source: { kind: "submission", submissionId: "one", visibility: "public" } },
     { title: "One", files: [], source: { kind: "submission", submissionId: "one" } },

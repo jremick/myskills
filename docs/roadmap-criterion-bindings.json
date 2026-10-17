@@ -747,7 +747,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -1359,9 +1359,9 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 121,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
-          "anchor": "export const SUBMISSION_BODY_LIMIT_BYTES = 14 * 1024 * 1024;"
+          "line": 122,
+          "sha256": "ac8699d36e61b36606a07eaedc592068ef0b91f9b0d763f571d1d37c7f9f087f",
+          "anchor": "export const SUBMISSION_BODY_LIMIT_BYTES = 40 * 1024 * 1024;"
         },
         {
           "path": "apps/api/src/db/seed.ts",
@@ -1410,8 +1410,8 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 362,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
+          "line": 363,
+          "sha256": "ac8699d36e61b36606a07eaedc592068ef0b91f9b0d763f571d1d37c7f9f087f",
           "anchor": "app.get(\"/v1/capabilities\", async () => {"
         },
         {
@@ -1483,8 +1483,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 636,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 659,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"server-local paths, artifact metadata, and unsafe file paths are rejected\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -1500,9 +1500,9 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 121,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
-          "anchor": "export const SUBMISSION_BODY_LIMIT_BYTES = 14 * 1024 * 1024;"
+          "line": 122,
+          "sha256": "ac8699d36e61b36606a07eaedc592068ef0b91f9b0d763f571d1d37c7f9f087f",
+          "anchor": "export const SUBMISSION_BODY_LIMIT_BYTES = 40 * 1024 * 1024;"
         },
         {
           "path": "apps/api/src/db/seed.ts",
@@ -1551,26 +1551,26 @@
       "sources": [
         {
           "path": "packages/skill-package/src/package-path.ts",
-          "line": 20,
-          "sha256": "d229203f84b72ef1a46950616479fa1a65f07c1b9bbbaff7f9afd4fbac139a91",
+          "line": 21,
+          "sha256": "362d26424ed04517f9106accff5ca1540cfd8a0ccefecc4d55ff2238487a3f7e",
           "anchor": "export const SKILL_PACKAGE_MANIFEST_CONTRACT_ID = \"myskills.skill-package.manifest.strict-root.v1\" as const;"
         },
         {
           "path": "packages/skill-package/src/scan.ts",
-          "line": 36,
-          "sha256": "c5dd028bd040242ed2414a5049605ccad900bc304b12583631ae6f5db610e4b7",
+          "line": 31,
+          "sha256": "52ec22a1eee2a2a95a608932af9a4bf06dc4f55a04fcae61c90fbe50c10e7e3e",
           "anchor": "export function scanTextForPackageRisks(text: string): ScanFinding[] {"
         },
         {
           "path": "packages/skill-package/src/manifest.ts",
-          "line": 23,
-          "sha256": "2e192384bd972414e22ee19cff3a043759afd0e5bb139cde30356a57fad1d7a7",
+          "line": 24,
+          "sha256": "2d57380e361e53e1c31d095c85d7855caa8e29b162f3787f0b2b7575b3515604",
           "anchor": "export const skillManifestSchema = z.object({"
         },
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 25,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 26,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "loadSkillManifestFromPackageFiles(snapshot);"
         }
       ],
@@ -1578,7 +1578,7 @@
         {
           "path": "packages/skill-package/test/package-path.test.ts",
           "line": 25,
-          "sha256": "bbd442ace72299a2e117fda6fe57a378f3edc40d92d96a6be4d488ee7b8b2a62",
+          "sha256": "0fdc0658f3fc97755569385b9b24b448061f7eb90546ab6704ef4ac93f8a5840",
           "anchor": "test(\"exports stable package manifest and scanner contract identifiers\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/package-path.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -1586,7 +1586,7 @@
         {
           "path": "packages/skill-package/test/scan.test.ts",
           "line": 20,
-          "sha256": "ea86590780223201b4eb5c77405665ca929fc06ad9d754cbb5f808d87939fd28",
+          "sha256": "e3f9e1fece7883e44278da15a9895ad57e6b4e8698731c78f898418fd8d2c26f",
           "anchor": "test(\"flags destructive shell snippets\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/scan.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -1602,8 +1602,8 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 941,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
+          "line": 942,
+          "sha256": "ac8699d36e61b36606a07eaedc592068ef0b91f9b0d763f571d1d37c7f9f087f",
           "anchor": "app.get(\"/v1/skills\", async (request) => {"
         },
         {
@@ -1706,8 +1706,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 75,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 98,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"authors can list and export their own submitted skill package\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -1745,8 +1745,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 823,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 846,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"submission rejects non-portable filenames before creating registry state\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -2060,8 +2060,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 75,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 98,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"authors can list and export their own submitted skill package\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -2077,14 +2077,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2217,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 2219,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 873,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 874,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "exportUserSubmission(submissionId: string, token?: string): Promise<SkillPackageBundle>;"
         }
       ],
@@ -2123,7 +2123,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -2163,8 +2163,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -2283,8 +2283,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 444,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 445,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -2425,7 +2425,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -2535,14 +2535,14 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2409,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2410,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -3165,7 +3165,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 188,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "export function createRegistryApiClient(options: RegistryApiClientOptions = {}): RegistryApiClient {"
         },
         {
@@ -3456,7 +3456,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 188,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "export function createRegistryApiClient(options: RegistryApiClientOptions = {}): RegistryApiClient {"
         },
         {
@@ -3567,26 +3567,26 @@
       "sources": [
         {
           "path": "packages/skill-package/src/package-path.ts",
-          "line": 9,
-          "sha256": "d229203f84b72ef1a46950616479fa1a65f07c1b9bbbaff7f9afd4fbac139a91",
+          "line": 10,
+          "sha256": "362d26424ed04517f9106accff5ca1540cfd8a0ccefecc4d55ff2238487a3f7e",
           "anchor": "export const DEFAULT_MANIFEST_NAMES = [\"skill.json\", \"skill-manifest.json\", \"ai-skill.json\"] as const;"
         },
         {
           "path": "packages/skill-package/src/scan.ts",
           "line": 10,
-          "sha256": "c5dd028bd040242ed2414a5049605ccad900bc304b12583631ae6f5db610e4b7",
-          "anchor": "export const MAX_SCAN_TEXT_LENGTH = 1024 * 1024;"
+          "sha256": "52ec22a1eee2a2a95a608932af9a4bf06dc4f55a04fcae61c90fbe50c10e7e3e",
+          "anchor": "export const MAX_SCAN_TEXT_LENGTH = 5 * 1024 * 1024;"
         },
         {
           "path": "packages/skill-package/src/manifest.ts",
-          "line": 23,
-          "sha256": "2e192384bd972414e22ee19cff3a043759afd0e5bb139cde30356a57fad1d7a7",
+          "line": 24,
+          "sha256": "2d57380e361e53e1c31d095c85d7855caa8e29b162f3787f0b2b7575b3515604",
           "anchor": "export const skillManifestSchema = z.object({"
         },
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 25,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 26,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "loadSkillManifestFromPackageFiles(snapshot);"
         }
       ],
@@ -3594,7 +3594,7 @@
         {
           "path": "packages/skill-package/test/package-path.test.ts",
           "line": 25,
-          "sha256": "bbd442ace72299a2e117fda6fe57a378f3edc40d92d96a6be4d488ee7b8b2a62",
+          "sha256": "0fdc0658f3fc97755569385b9b24b448061f7eb90546ab6704ef4ac93f8a5840",
           "anchor": "test(\"exports stable package manifest and scanner contract identifiers\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/package-path.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3602,7 +3602,7 @@
         {
           "path": "packages/skill-package/test/scan.test.ts",
           "line": 6,
-          "sha256": "ea86590780223201b4eb5c77405665ca929fc06ad9d754cbb5f808d87939fd28",
+          "sha256": "e3f9e1fece7883e44278da15a9895ad57e6b4e8698731c78f898418fd8d2c26f",
           "anchor": "test(\"flags secret-looking package text\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/scan.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3640,8 +3640,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 842,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 865,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"new versions must use the existing skill's visibility at submission\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3657,14 +3657,14 @@
       "sources": [
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 21,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 22,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "export function encodePackageArchive(files: readonly PackageInputFile[]): Buffer {"
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -3696,14 +3696,14 @@
       "sources": [
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 25,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 26,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "loadSkillManifestFromPackageFiles(snapshot);"
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 180,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 179,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "text(): Promise<string>;"
         }
       ],
@@ -3802,8 +3802,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 182,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 205,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"submission detail exposes review reasons and scan evidence only to its author or a reviewer\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3841,8 +3841,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 182,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 205,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"submission detail exposes review reasons and scan evidence only to its author or a reviewer\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3926,7 +3926,7 @@
         {
           "path": "apps/api/test/submission-routes.test.ts",
           "line": 51,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"authors can submit clean packages\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -3942,14 +3942,14 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2409,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2410,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -4050,8 +4050,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4142,26 +4142,26 @@
       "sources": [
         {
           "path": "packages/skill-package/src/package-path.ts",
-          "line": 332,
-          "sha256": "d229203f84b72ef1a46950616479fa1a65f07c1b9bbbaff7f9afd4fbac139a91",
+          "line": 338,
+          "sha256": "362d26424ed04517f9106accff5ca1540cfd8a0ccefecc4d55ff2238487a3f7e",
           "anchor": "export function validatePackageFiles(files: readonly PackageInputFile[]): PackageFileValidationResult {"
         },
         {
           "path": "packages/skill-package/src/scan.ts",
-          "line": 36,
-          "sha256": "c5dd028bd040242ed2414a5049605ccad900bc304b12583631ae6f5db610e4b7",
+          "line": 31,
+          "sha256": "52ec22a1eee2a2a95a608932af9a4bf06dc4f55a04fcae61c90fbe50c10e7e3e",
           "anchor": "export function scanTextForPackageRisks(text: string): ScanFinding[] {"
         },
         {
           "path": "packages/skill-package/src/manifest.ts",
-          "line": 4,
-          "sha256": "2e192384bd972414e22ee19cff3a043759afd0e5bb139cde30356a57fad1d7a7",
+          "line": 5,
+          "sha256": "2d57380e361e53e1c31d095c85d7855caa8e29b162f3787f0b2b7575b3515604",
           "anchor": "export const skillSlugSchema = z"
         },
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 8,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 9,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "export class PackageArchiveScanError extends Error {"
         }
       ],
@@ -4169,7 +4169,7 @@
         {
           "path": "packages/skill-package/test/package-path.test.ts",
           "line": 283,
-          "sha256": "bbd442ace72299a2e117fda6fe57a378f3edc40d92d96a6be4d488ee7b8b2a62",
+          "sha256": "0fdc0658f3fc97755569385b9b24b448061f7eb90546ab6704ef4ac93f8a5840",
           "anchor": "test(\"validation-only payload checks reject malformed paths, text and collisions\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/package-path.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4177,7 +4177,7 @@
         {
           "path": "packages/skill-package/test/scan.test.ts",
           "line": 20,
-          "sha256": "ea86590780223201b4eb5c77405665ca929fc06ad9d754cbb5f808d87939fd28",
+          "sha256": "e3f9e1fece7883e44278da15a9895ad57e6b4e8698731c78f898418fd8d2c26f",
           "anchor": "test(\"flags destructive shell snippets\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/scan.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4193,8 +4193,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4226,8 +4226,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 218,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 217,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -4259,8 +4259,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         }
       ],
@@ -4304,16 +4304,16 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 381,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 385,
+          "sha256": "f66ef3b50e4c101f01778830b0375c6dd684523d854ae68371ca9d4ca9d9848c",
           "anchor": "useEffect(() => { generation.current += 1; setBusy(false); setError(null); return () => { generation.current += 1; }; }, [api, slug, version, platform]);"
         }
       ],
       "checks": [
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
-          "line": 263,
-          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
+          "line": 271,
+          "sha256": "b45a1ef36571401f779600743cb7b3a1bb706eeb29a21bba16dd5e1bb607d22d",
           "anchor": "await t.test(\"source membership revoked while draft allocation waits cannot persist held bytes\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4321,7 +4321,7 @@
         {
           "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
           "line": 22,
-          "sha256": "25e0b9c65e885ee88be77ff9b58225cf7c7bd497ea783cc85abffba89f3284ea",
+          "sha256": "bf7d0eb146f53fdaa608e8605cffd76b912351a345c0ff98ce628a3d11a74dc3",
           "anchor": "test(\"CLI drafts preserve files, source identity, exact revisions, release metadata and API scan states\", async (t) => {",
           "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4337,14 +4337,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 614,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 615,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 830,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 831,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "searchSkills(query: string): Promise<PublicSkill[]>;"
         }
       ],
@@ -4376,14 +4376,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 729,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 730,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 886,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 887,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "acceptTeamInvitation(invitationId: string, token?: string): Promise<TeamInvitation>;"
         }
       ],
@@ -4427,16 +4427,16 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 381,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 385,
+          "sha256": "f66ef3b50e4c101f01778830b0375c6dd684523d854ae68371ca9d4ca9d9848c",
           "anchor": "useEffect(() => { generation.current += 1; setBusy(false); setError(null); return () => { generation.current += 1; }; }, [api, slug, version, platform]);"
         }
       ],
       "checks": [
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
-          "line": 223,
-          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
+          "line": 231,
+          "sha256": "b45a1ef36571401f779600743cb7b3a1bb706eeb29a21bba16dd5e1bb607d22d",
           "anchor": "await t.test(\"save raced with submit cannot bind changed bytes\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4444,7 +4444,7 @@
         {
           "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
           "line": 22,
-          "sha256": "25e0b9c65e885ee88be77ff9b58225cf7c7bd497ea783cc85abffba89f3284ea",
+          "sha256": "bf7d0eb146f53fdaa608e8605cffd76b912351a345c0ff98ce628a3d11a74dc3",
           "anchor": "test(\"CLI drafts preserve files, source identity, exact revisions, release metadata and API scan states\", async (t) => {",
           "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4460,8 +4460,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2630,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 2632,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4528,14 +4528,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 254,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 255,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 860,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 861,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "getAdminSharing(token?: string): Promise<AdminSharingSettings>;"
         }
       ],
@@ -4573,8 +4573,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 254,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 255,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         }
       ],
@@ -4612,8 +4612,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 858,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 859,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -4645,14 +4645,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 444,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 445,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 860,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 861,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "getAdminSharing(token?: string): Promise<AdminSharingSettings>;"
         }
       ],
@@ -4690,8 +4690,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 563,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 564,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -4723,14 +4723,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 903,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 904,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 830,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 831,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "searchSkills(query: string): Promise<PublicSkill[]>;"
         }
       ],
@@ -4762,14 +4762,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 4477,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 4479,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 836,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 837,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "confirmPasswordReset(input: { token: string; password: string }): Promise<{ status: \"reset\" }>;"
         }
       ],
@@ -4813,16 +4813,16 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 377,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 381,
+          "sha256": "f66ef3b50e4c101f01778830b0375c6dd684523d854ae68371ca9d4ca9d9848c",
           "anchor": "export function ForkReleaseDraft({ api, slug, version, platform }: { api: DraftClient; slug: string; version: string; platform: string }) {"
         }
       ],
       "checks": [
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
-          "line": 245,
-          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
+          "line": 253,
+          "sha256": "b45a1ef36571401f779600743cb7b3a1bb706eeb29a21bba16dd5e1bb607d22d",
           "anchor": "await t.test(\"release seed preserves exact bytes and cannot survive mid-read revocation\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4830,7 +4830,7 @@
         {
           "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
           "line": 22,
-          "sha256": "25e0b9c65e885ee88be77ff9b58225cf7c7bd497ea783cc85abffba89f3284ea",
+          "sha256": "bf7d0eb146f53fdaa608e8605cffd76b912351a345c0ff98ce628a3d11a74dc3",
           "anchor": "test(\"CLI drafts preserve files, source identity, exact revisions, release metadata and API scan states\", async (t) => {",
           "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -4846,8 +4846,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 811,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 812,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4891,8 +4891,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2630,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 2632,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -4959,14 +4959,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 903,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 904,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 879,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 880,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "listSkillReleases(slug: string, token?: string): Promise<SkillReleaseSummary[]>;"
         }
       ],
@@ -4998,14 +4998,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 839,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 840,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 878,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 879,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "performReviewAction(input: { submissionId: string; action: ReviewActionName; reason?: string; artifactSha256?: string }, token?: string): Promise<ReviewActionResult>;"
         }
       ],
@@ -5037,14 +5037,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 6529,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 6531,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "setDraft({"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 862,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 863,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "listAdminUsers(token?: string): Promise<AdminUser[]>;"
         }
       ],
@@ -5082,8 +5082,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 595,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 596,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -5189,14 +5189,14 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 254,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 255,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         },
         {
           "path": "apps/web/src/api.ts",
-          "line": 885,
-          "sha256": "19cc65bbe86727079e43234da6d1e02f4d85fc5886c654042924c9618dd65a54",
+          "line": 886,
+          "sha256": "4bc5dc8fb9c8b1810c6a59eaeb3e78f36c6a52a7e04cbf91d3f42896203047ac",
           "anchor": "inviteTeamMember(teamId: string, email: string, token?: string): Promise<TeamInvitation>;"
         }
       ],
@@ -5240,8 +5240,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 381,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 385,
+          "sha256": "f66ef3b50e4c101f01778830b0375c6dd684523d854ae68371ca9d4ca9d9848c",
           "anchor": "useEffect(() => { generation.current += 1; setBusy(false); setError(null); return () => { generation.current += 1; }; }, [api, slug, version, platform]);"
         }
       ],
@@ -5249,7 +5249,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 42,
-          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
+          "sha256": "b45a1ef36571401f779600743cb7b3a1bb706eeb29a21bba16dd5e1bb607d22d",
           "anchor": "test(\"private draft route journey preserves history, isolation and atomic submission\", { timeout: 180_000 }, async (t) => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5257,7 +5257,7 @@
         {
           "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
           "line": 22,
-          "sha256": "25e0b9c65e885ee88be77ff9b58225cf7c7bd497ea783cc85abffba89f3284ea",
+          "sha256": "bf7d0eb146f53fdaa608e8605cffd76b912351a345c0ff98ce628a3d11a74dc3",
           "anchor": "test(\"CLI drafts preserve files, source identity, exact revisions, release metadata and API scan states\", async (t) => {",
           "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -5291,8 +5291,8 @@
         },
         {
           "path": "apps/web/src/components/registry/ReleaseComparison.tsx",
-          "line": 23,
-          "sha256": "0cba568a6032d63d46447b16697099d8237b46e39ff9e39010275c87d32cfd67",
+          "line": 24,
+          "sha256": "d532ed2bf1212f5609cbdb8510380423ceafd92aca10d7660630cdd00563ca8f",
           "anchor": "export function ReleaseComparison(props: Props) {"
         }
       ],
@@ -5618,8 +5618,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 2630,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 2632,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -5783,8 +5783,8 @@
         },
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 8,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 9,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "export class PackageArchiveScanError extends Error {"
         }
       ],
@@ -6072,8 +6072,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 254,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 255,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "export function RegistryApp({ client }: RegistryAppProps) {"
         },
         {
@@ -6232,7 +6232,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -6279,7 +6279,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -6326,7 +6326,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -6373,7 +6373,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 90,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "export function createNativeRegistryApiClient(options: RegistryApiClientOptions, signal: AbortSignal) {"
         },
         {
@@ -6420,7 +6420,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -6467,7 +6467,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -6514,7 +6514,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 84,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "export const NATIVE_API_METADATA_BYTES = 512 * 1024;"
         },
         {
@@ -6561,7 +6561,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -6614,7 +6614,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 188,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "export function createRegistryApiClient(options: RegistryApiClientOptions = {}): RegistryApiClient {"
         },
         {
@@ -6667,7 +6667,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 31,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "getSkill(slug: string): Promise<PublicSkill>;"
         },
         {
@@ -6714,7 +6714,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -6761,7 +6761,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -6808,7 +6808,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 90,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "export function createNativeRegistryApiClient(options: RegistryApiClientOptions, signal: AbortSignal) {"
         },
         {
@@ -7541,7 +7541,7 @@
         {
           "path": "apps/cli/src/cli.ts",
           "line": 1592,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertCodexObservationOptions(parsed, healthOnly);"
         },
         {
@@ -7702,8 +7702,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2871,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2872,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "preflightScopeEnrollment(initialState, provider, scope, location.path);"
         },
         {
@@ -8228,14 +8228,14 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2088,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2089,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertLibraryVersion(libraryResolution, version);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 72,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export function assertInstallRootLocked(root: string): void {"
         }
       ],
@@ -8939,7 +8939,7 @@
         {
           "path": "scripts/check-prerelease.mjs",
           "line": 244,
-          "sha256": "0bd0137a2e43dadf44c6ae0334fd9611670f429e2fd03420b9d2dc09df1e3053",
+          "sha256": "3af05409be35e893e8eb6ee69f66207017e56f4a42b856fe04a3ad4b3eef19bc",
           "anchor": "assertContains(\"docs/RELEASE.md\", \"npm run release:verify\");"
         },
         {
@@ -8967,7 +8967,7 @@
         {
           "path": "scripts/check-prerelease.mjs",
           "line": 131,
-          "sha256": "0bd0137a2e43dadf44c6ae0334fd9611670f429e2fd03420b9d2dc09df1e3053",
+          "sha256": "3af05409be35e893e8eb6ee69f66207017e56f4a42b856fe04a3ad4b3eef19bc",
           "anchor": "if (!/^\\d+\\.\\d+\\.\\d+-beta\\.\\d+$/.test(version)) {",
           "command": "node scripts/check-prerelease.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8992,7 +8992,7 @@
         {
           "path": "scripts/check-prerelease.mjs",
           "line": 183,
-          "sha256": "0bd0137a2e43dadf44c6ae0334fd9611670f429e2fd03420b9d2dc09df1e3053",
+          "sha256": "3af05409be35e893e8eb6ee69f66207017e56f4a42b856fe04a3ad4b3eef19bc",
           "anchor": "assertContains(\"docs/GETTING_STARTED.md\", \"cp .env.example .env\");"
         },
         {
@@ -9020,7 +9020,7 @@
         {
           "path": "scripts/check-prerelease.mjs",
           "line": 212,
-          "sha256": "0bd0137a2e43dadf44c6ae0334fd9611670f429e2fd03420b9d2dc09df1e3053",
+          "sha256": "3af05409be35e893e8eb6ee69f66207017e56f4a42b856fe04a3ad4b3eef19bc",
           "anchor": "if (/^(?:file|link|workspace):/.test(String(specifier))) {",
           "command": "node scripts/check-prerelease.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9526,7 +9526,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -9650,14 +9650,14 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2409,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2410,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -9921,7 +9921,7 @@
         {
           "path": "docs/OPERATIONAL_ACCEPTANCE.md",
           "line": 1,
-          "sha256": "6b1e0101d831a35fe354de4e2c426f8a04e4f404ddf5fca2cc6a2be4d49bf265",
+          "sha256": "c1424e6dca6d139933a755becde37969a7b35a58dd883c09a235d5a2c4451ab9",
           "anchor": "# Operational acceptance and recovery rehearsal"
         },
         {
@@ -10461,7 +10461,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 31,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "getSkill(slug: string): Promise<PublicSkill>;"
         },
         {
@@ -10508,7 +10508,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 31,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "getSkill(slug: string): Promise<PublicSkill>;"
         },
         {
@@ -10626,7 +10626,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -10673,7 +10673,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 179,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "export class RegistryApiError extends Error {"
         },
         {
@@ -10720,7 +10720,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -10767,7 +10767,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 31,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "getSkill(slug: string): Promise<PublicSkill>;"
         },
         {
@@ -10814,7 +10814,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 84,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "export const NATIVE_API_METADATA_BYTES = 512 * 1024;"
         },
         {
@@ -10866,16 +10866,16 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 381,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 385,
+          "sha256": "f66ef3b50e4c101f01778830b0375c6dd684523d854ae68371ca9d4ca9d9848c",
           "anchor": "useEffect(() => { generation.current += 1; setBusy(false); setError(null); return () => { generation.current += 1; }; }, [api, slug, version, platform]);"
         }
       ],
       "checks": [
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
-          "line": 287,
-          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
+          "line": 295,
+          "sha256": "b45a1ef36571401f779600743cb7b3a1bb706eeb29a21bba16dd5e1bb607d22d",
           "anchor": "await t.test(\"database payload drift cannot be attributed to the original release or submission digest\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -10883,7 +10883,7 @@
         {
           "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
           "line": 22,
-          "sha256": "25e0b9c65e885ee88be77ff9b58225cf7c7bd497ea783cc85abffba89f3284ea",
+          "sha256": "bf7d0eb146f53fdaa608e8605cffd76b912351a345c0ff98ce628a3d11a74dc3",
           "anchor": "test(\"CLI drafts preserve files, source identity, exact revisions, release metadata and API scan states\", async (t) => {",
           "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -10911,16 +10911,16 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 17,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 18,
+          "sha256": "f66ef3b50e4c101f01778830b0375c6dd684523d854ae68371ca9d4ca9d9848c",
           "anchor": "export function DraftWorkspace(props: Omit<Parameters<typeof DraftWorkspaceState>[0], \"recoveryScope\"> & { credentialEpoch?: string }) {"
         }
       ],
       "checks": [
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
-          "line": 403,
-          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
+          "line": 411,
+          "sha256": "b45a1ef36571401f779600743cb7b3a1bb706eeb29a21bba16dd5e1bb607d22d",
           "anchor": "await t.test(\"draft submit denies stale authority after both head and allocation waits without version job or receipt\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -10928,7 +10928,7 @@
         {
           "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
           "line": 22,
-          "sha256": "25e0b9c65e885ee88be77ff9b58225cf7c7bd497ea783cc85abffba89f3284ea",
+          "sha256": "bf7d0eb146f53fdaa608e8605cffd76b912351a345c0ff98ce628a3d11a74dc3",
           "anchor": "test(\"CLI drafts preserve files, source identity, exact revisions, release metadata and API scan states\", async (t) => {",
           "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -10956,8 +10956,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 153,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 154,
+          "sha256": "f66ef3b50e4c101f01778830b0375c6dd684523d854ae68371ca9d4ca9d9848c",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -10965,7 +10965,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 95,
-          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
+          "sha256": "b45a1ef36571401f779600743cb7b3a1bb706eeb29a21bba16dd5e1bb607d22d",
           "anchor": "await t.test(\"save incomplete metadata then correct multi-file content without changing history\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -10973,7 +10973,7 @@
         {
           "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
           "line": 22,
-          "sha256": "25e0b9c65e885ee88be77ff9b58225cf7c7bd497ea783cc85abffba89f3284ea",
+          "sha256": "bf7d0eb146f53fdaa608e8605cffd76b912351a345c0ff98ce628a3d11a74dc3",
           "anchor": "test(\"CLI drafts preserve files, source identity, exact revisions, release metadata and API scan states\", async (t) => {",
           "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -10995,9 +10995,9 @@
         },
         {
           "path": "apps/api/src/libraries/packaging.ts",
-          "line": 38,
-          "sha256": "60cfd99587b2128f11164f4b293da465fa668fcb1e60c281a92b5793af436aa4",
-          "anchor": "export const IMPORTER_VERSION = \"myskills-library-importer/2\";"
+          "line": 43,
+          "sha256": "99b3cc345b00846ee7f525b7c576fcff8d123280738fa34b4be6daab33ca939c",
+          "anchor": "export const IMPORTER_VERSION = \"myskills-library-importer/3\";"
         },
         {
           "path": "apps/api/src/libraries/service.ts",
@@ -11052,16 +11052,16 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 114,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 115,
+          "sha256": "f66ef3b50e4c101f01778830b0375c6dd684523d854ae68371ca9d4ca9d9848c",
           "anchor": "useEffect(() => {"
         }
       ],
       "checks": [
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
-          "line": 245,
-          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
+          "line": 253,
+          "sha256": "b45a1ef36571401f779600743cb7b3a1bb706eeb29a21bba16dd5e1bb607d22d",
           "anchor": "await t.test(\"release seed preserves exact bytes and cannot survive mid-read revocation\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -11069,7 +11069,7 @@
         {
           "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
           "line": 22,
-          "sha256": "25e0b9c65e885ee88be77ff9b58225cf7c7bd497ea783cc85abffba89f3284ea",
+          "sha256": "bf7d0eb146f53fdaa608e8605cffd76b912351a345c0ff98ce628a3d11a74dc3",
           "anchor": "test(\"CLI drafts preserve files, source identity, exact revisions, release metadata and API scan states\", async (t) => {",
           "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -11091,8 +11091,8 @@
         },
         {
           "path": "apps/api/src/libraries/packaging.ts",
-          "line": 272,
-          "sha256": "60cfd99587b2128f11164f4b293da465fa668fcb1e60c281a92b5793af436aa4",
+          "line": 287,
+          "sha256": "99b3cc345b00846ee7f525b7c576fcff8d123280738fa34b4be6daab33ca939c",
           "anchor": "export function importProfileDigest(input: { overrides: MappingOverrides; visibility: VisibilityScope }): string {"
         },
         {
@@ -11148,8 +11148,8 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 381,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 385,
+          "sha256": "f66ef3b50e4c101f01778830b0375c6dd684523d854ae68371ca9d4ca9d9848c",
           "anchor": "useEffect(() => { generation.current += 1; setBusy(false); setError(null); return () => { generation.current += 1; }; }, [api, slug, version, platform]);"
         }
       ],
@@ -11157,7 +11157,7 @@
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
           "line": 95,
-          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
+          "sha256": "b45a1ef36571401f779600743cb7b3a1bb706eeb29a21bba16dd5e1bb607d22d",
           "anchor": "await t.test(\"save incomplete metadata then correct multi-file content without changing history\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -11165,7 +11165,7 @@
         {
           "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
           "line": 22,
-          "sha256": "25e0b9c65e885ee88be77ff9b58225cf7c7bd497ea783cc85abffba89f3284ea",
+          "sha256": "bf7d0eb146f53fdaa608e8605cffd76b912351a345c0ff98ce628a3d11a74dc3",
           "anchor": "test(\"CLI drafts preserve files, source identity, exact revisions, release metadata and API scan states\", async (t) => {",
           "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -11187,8 +11187,8 @@
         },
         {
           "path": "apps/api/src/libraries/packaging.ts",
-          "line": 832,
-          "sha256": "60cfd99587b2128f11164f4b293da465fa668fcb1e60c281a92b5793af436aa4",
+          "line": 853,
+          "sha256": "99b3cc345b00846ee7f525b7c576fcff8d123280738fa34b4be6daab33ca939c",
           "anchor": "export function packageDigestFor(files: ReadonlyArray<{ path: string; content: string }>): string {"
         },
         {
@@ -11244,24 +11244,24 @@
         },
         {
           "path": "apps/web/src/components/authoring/DraftWorkspace.tsx",
-          "line": 377,
-          "sha256": "b96076bfe42f06c780e2fda60b0afcc8a7dd43d1353bc287c272e3897521c990",
+          "line": 381,
+          "sha256": "f66ef3b50e4c101f01778830b0375c6dd684523d854ae68371ca9d4ca9d9848c",
           "anchor": "export function ForkReleaseDraft({ api, slug, version, platform }: { api: DraftClient; slug: string; version: string; platform: string }) {"
         }
       ],
       "checks": [
         {
           "path": "apps/api/test/drafts-journey.pgtest.ts",
-          "line": 202,
-          "sha256": "ae8dc16d5067391efb26ef62d34c3e08c7ceca1ea077f2459a05c3a0e7797c03",
+          "line": 210,
+          "sha256": "b45a1ef36571401f779600743cb7b3a1bb706eeb29a21bba16dd5e1bb607d22d",
           "anchor": "await t.test(\"duplicate versions and failure after insert leave no partial draft receipt\", async () => {",
           "command": "TEST_DATABASE_URL=<disposable test database> node --import tsx --test --test-concurrency=1 apps/api/test/drafts-journey.pgtest.ts",
           "execution": "prepared_not_run_on_final_commit"
         },
         {
           "path": "apps/cli/test/author-draft-parity.e2e.test.ts",
-          "line": 63,
-          "sha256": "25e0b9c65e885ee88be77ff9b58225cf7c7bd497ea783cc85abffba89f3284ea",
+          "line": 70,
+          "sha256": "bf7d0eb146f53fdaa608e8605cffd76b912351a345c0ff98ce628a3d11a74dc3",
           "anchor": "test(\"CLI drafts reject invented fields, malformed revisions and unsafe paths before HTTP; API denial stays safe\", async (t) => {",
           "command": "node --import tsx --test apps/cli/test/author-draft-parity.e2e.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -13481,7 +13481,7 @@
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -13614,8 +13614,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 218,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 217,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -14229,26 +14229,26 @@
       "sources": [
         {
           "path": "packages/skill-package/src/package-path.ts",
-          "line": 9,
-          "sha256": "d229203f84b72ef1a46950616479fa1a65f07c1b9bbbaff7f9afd4fbac139a91",
+          "line": 10,
+          "sha256": "362d26424ed04517f9106accff5ca1540cfd8a0ccefecc4d55ff2238487a3f7e",
           "anchor": "export const DEFAULT_MANIFEST_NAMES = [\"skill.json\", \"skill-manifest.json\", \"ai-skill.json\"] as const;"
         },
         {
           "path": "packages/skill-package/src/scan.ts",
           "line": 10,
-          "sha256": "c5dd028bd040242ed2414a5049605ccad900bc304b12583631ae6f5db610e4b7",
-          "anchor": "export const MAX_SCAN_TEXT_LENGTH = 1024 * 1024;"
+          "sha256": "52ec22a1eee2a2a95a608932af9a4bf06dc4f55a04fcae61c90fbe50c10e7e3e",
+          "anchor": "export const MAX_SCAN_TEXT_LENGTH = 5 * 1024 * 1024;"
         },
         {
           "path": "packages/skill-package/src/manifest.ts",
-          "line": 17,
-          "sha256": "2e192384bd972414e22ee19cff3a043759afd0e5bb139cde30356a57fad1d7a7",
+          "line": 18,
+          "sha256": "2d57380e361e53e1c31d095c85d7855caa8e29b162f3787f0b2b7575b3515604",
           "anchor": "export const platformVariantSchema = z.object({"
         },
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 21,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 22,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "export function encodePackageArchive(files: readonly PackageInputFile[]): Buffer {"
         }
       ],
@@ -14256,7 +14256,7 @@
         {
           "path": "packages/skill-package/test/package-path.test.ts",
           "line": 344,
-          "sha256": "bbd442ace72299a2e117fda6fe57a378f3edc40d92d96a6be4d488ee7b8b2a62",
+          "sha256": "0fdc0658f3fc97755569385b9b24b448061f7eb90546ab6704ef4ac93f8a5840",
           "anchor": "test(\"rejects unsafe package payload paths\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/package-path.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14264,7 +14264,7 @@
         {
           "path": "packages/skill-package/test/scan.test.ts",
           "line": 6,
-          "sha256": "ea86590780223201b4eb5c77405665ca929fc06ad9d754cbb5f808d87939fd28",
+          "sha256": "e3f9e1fece7883e44278da15a9895ad57e6b4e8698731c78f898418fd8d2c26f",
           "anchor": "test(\"flags secret-looking package text\", () => {",
           "command": "node --import tsx --test packages/skill-package/test/scan.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14280,8 +14280,8 @@
       "sources": [
         {
           "path": "apps/web/src/components/registry/ReviewComparison.tsx",
-          "line": 8,
-          "sha256": "ee7044f627a83e79ede92c0017f47f192205f40df4244c32be9bdc88f16a50c9",
+          "line": 9,
+          "sha256": "47fb4f4d61a80ff5ff47ff5def7e98ab64c8dcc17ca498dfdb68f71eeea4f04d",
           "anchor": "export function ReviewComparison({ client, submission }: { client: RegistryClient; submission: ReviewSubmissionSummary }) {"
         },
         {
@@ -14378,8 +14378,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 610,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 633,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"duplicate slug and version are rejected\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -14402,7 +14402,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -14449,7 +14449,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 26,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "authenticateMcp(method?: NativeMcpMethod, signal?: AbortSignal): Promise<McpSession>;"
         },
         {
@@ -14496,7 +14496,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 188,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "export function createRegistryApiClient(options: RegistryApiClientOptions = {}): RegistryApiClient {"
         },
         {
@@ -14543,7 +14543,7 @@
         {
           "path": "apps/mcp/src/api-client.ts",
           "line": 84,
-          "sha256": "72f626bef164c7ac5399954e4c4da87f2a13c339091c854f6c55fb19306c1c61",
+          "sha256": "7dcaac37569edc9dba6f876be9706aa1805186c8eee6d41f0114e8ed2465144b",
           "anchor": "export const NATIVE_API_METADATA_BYTES = 512 * 1024;"
         },
         {
@@ -14583,8 +14583,8 @@
       "sources": [
         {
           "path": "apps/web/src/App.tsx",
-          "line": 444,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 445,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         },
         {
@@ -14667,14 +14667,14 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2409,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2410,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertChildPath(path.join(root, \".myskills-app\", \"history\"), sourceSnapshotPath);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -14706,14 +14706,14 @@
       "sources": [
         {
           "path": "packages/skill-package/src/archive.ts",
-          "line": 8,
-          "sha256": "008a1f520d18cd344973d69fb98d4023887cea3acbe3e8e5d1a63e8554c7bf0f",
+          "line": 9,
+          "sha256": "fe58f32b493bb4fcf0084d5578e4f06b710cd44b39e0b07e5e7731d40e10dbb5",
           "anchor": "export class PackageArchiveScanError extends Error {"
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 180,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 179,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "text(): Promise<string>;"
         }
       ],
@@ -14745,14 +14745,14 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2418,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2419,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertMatchingProvenance(previous, existing.provenance);"
         },
         {
           "path": "apps/cli/src/install-filesystem.ts",
           "line": 18,
-          "sha256": "151f4f9673bdc8cb0d8c92f1e4650b7b45ce98d060a50f39902df2fbfc70bb64",
+          "sha256": "aa7f295f7c28a1b485833c4daf32666691a48e211f762f73505e3e89cf1b2088",
           "anchor": "export async function withInstallRootLock<T>(inputRoot: string, work: (root: string) => Promise<T>, onWait?: () => void): Promise<T> {"
         }
       ],
@@ -14875,13 +14875,13 @@
         {
           "path": "docs/OPERATIONAL_ACCEPTANCE.md",
           "line": 1,
-          "sha256": "6b1e0101d831a35fe354de4e2c426f8a04e4f404ddf5fca2cc6a2be4d49bf265",
+          "sha256": "c1424e6dca6d139933a755becde37969a7b35a58dd883c09a235d5a2c4451ab9",
           "anchor": "# Operational acceptance and recovery rehearsal"
         },
         {
           "path": "docs/DEPLOYMENT.md",
           "line": 58,
-          "sha256": "8656caa97234cab23fc340f4b26b57ef2e492152cc70c941375a69b760dc2f3b",
+          "sha256": "54330fba99053dc1434217b2cc369fd2b2cb9ac68bfb48c3b6b7d1985bb08ce8",
           "anchor": "## Legacy Artifact Migration Preflight"
         },
         {
@@ -16077,8 +16077,8 @@
       "sources": [
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 218,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 217,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "export async function runCli(argv: string[], runtime: CliRuntime): Promise<number> {"
         }
       ],
@@ -16349,8 +16349,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 842,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 865,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"new versions must use the existing skill's visibility at submission\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -16388,8 +16388,8 @@
         },
         {
           "path": "apps/api/test/submission-routes.test.ts",
-          "line": 182,
-          "sha256": "1aac1aae32ab19a8e73ae2e58a0886637d25d3c0c2cd8b7881ac408a56ecbcb9",
+          "line": 205,
+          "sha256": "b866b12465d02be99aa4269570413f48ed0054fe9875b016812d6d5f63c1ec92",
           "anchor": "test(\"submission detail exposes review reasons and scan evidence only to its author or a reviewer\", async (t) => {",
           "command": "node --import tsx --test apps/api/test/submission-routes.test.ts",
           "execution": "prepared_not_run_on_final_commit"
@@ -18847,8 +18847,8 @@
         },
         {
           "path": "apps/cli/src/cli.ts",
-          "line": 2522,
-          "sha256": "682a7496334a3beab55432c3d047e4be68aeb5ee1714d44dfba951e9262bc2cb",
+          "line": 2523,
+          "sha256": "54e5077fb6a13db9c0414f715622f56cae592d087964d607cf59299ecb6d2f8f",
           "anchor": "assertMatchingProvenance(binding,provenance);"
         }
       ],
@@ -19909,8 +19909,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5968,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 5970,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -19954,8 +19954,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5968,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 5970,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -19999,8 +19999,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5968,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 5970,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20044,8 +20044,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 444,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 445,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20089,8 +20089,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 729,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 730,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20134,8 +20134,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5968,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 5970,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],
@@ -20179,8 +20179,8 @@
         },
         {
           "path": "apps/web/src/App.tsx",
-          "line": 5968,
-          "sha256": "d7306d83dd6b60d364dbc8e6940814e0eaa573c07b87fe695689b39562a2cc09",
+          "line": 5970,
+          "sha256": "2ea7f76995dc6b046b0f18524f41a4f9fe350893aa0840cc6582be66f0c65d37",
           "anchor": "useEffect(() => {"
         }
       ],

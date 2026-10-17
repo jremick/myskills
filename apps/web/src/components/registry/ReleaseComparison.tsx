@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { isRasterPackageImage } from "../../package-images.js";
 import { Button } from "@/components/ui/button";
 import { safeErrorMessage, type RegistryClient, type SkillReleaseSummary } from "../../api.js";
 import { isPublishedRelease } from "./skill-workspace.js";
@@ -143,7 +144,7 @@ function ComparisonWorkspace({ client, slug, releases, historyState, unavailable
 }
 
 function FileContents({ side, version, path, content }: { side: "Base" | "Target"; version: string; path: string; content: string | undefined }) {
-  const binary = content?.includes("\0") ?? false;
+  const binary = isRasterPackageImage(path) || (content?.includes("\0") ?? false);
   return <div>
     <h5>{side} · <code>{version}</code></h5>
     {content === undefined ? <p className="registry-muted">Absent in {side.toLowerCase()} release.</p>

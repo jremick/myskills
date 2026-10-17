@@ -33,6 +33,52 @@ test("validate reads a skill manifest from a zip", async (t) => {
   assert.deepEqual(output.stdout, ["valid release-notes-helper@0.1.0"]);
 });
 
+test("validate generates a private manifest from YAML frontmatter without changing the source", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeFile(path.join(dir, "SKILL.md"), "---\nname: frontmatter-helper\ndescription: >-\n  Write a useful summary\n  from supplied changes.\n---\nUse the supplied changes.\n");
+  const output = createOutput();
+  const code = await runCli(["validate", "--path", dir, "--json"], testRuntime(output));
+  assert.equal(code, 0, output.stderr.join("\n"));
+  const result = JSON.parse(output.stdout.join("\n"));
+  assert.equal(result.manifest.name, "frontmatter-helper");
+  assert.equal(result.manifest.summary, "Write a useful summary from supplied changes.");
+  assert.equal(result.manifest.version, "0.1.0");
+  assert.equal(result.manifest.visibility, "private");
+  assert.match(output.stderr.join("\n"), /Generated skill\.json from SKILL\.md.*source files unchanged/);
+  await assert.rejects(readFile(path.join(dir, "skill.json")), { code: "ENOENT" });
+});
+
+test("submit includes its generated manifest in the scanned ZIP snapshot", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const zipPath = path.join(dir, "frontmatter.zip");
+  await writeStoredZip(zipPath, [{ path: "SKILL.md", content: "---\nname: frontmatter-helper\ndescription: Write concise notes.\nversion: 1.2.3\n---\nUse supplied changes.\n" }]);
+  const original = await readFile(zipPath);
+  const output = createOutput();
+  let body: { manifest?: { name: string; version: string; visibility: string }; files?: Array<{ path: string; content: string }> } = {};
+  const fetch: FetchLike = async (_input, init) => {
+    body = JSON.parse(init?.body ?? "{}");
+    return response(202, { submission: { slug: "frontmatter-helper", version: "1.2.3", reviewStatus: "unreviewed", securityStatus: "passed" }, scan: { findingCount: 0 } });
+  };
+  assert.equal(await runCli(["submit", "--path", zipPath], testRuntime(output, fetch, { MYSKILLS_TOKEN: "submit-token" })), 0, output.stderr.join("\n"));
+  assert.equal(body.manifest?.visibility, "private");
+  assert.equal(body.manifest?.version, "1.2.3");
+  assert.deepEqual(JSON.parse(body.files!.find(file => file.path === "skill.json")!.content), body.manifest);
+  assert.match(output.stderr.join("\n"), /Generated skill\.json/);
+  assert.deepEqual(await readFile(zipPath), original);
+});
+
+test("validate does not replace an invalid existing manifest with frontmatter", async (t) => {
+  const dir = await makeTempPackage();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeFile(path.join(dir, "skill.json"), "{}");
+  await writeFile(path.join(dir, "SKILL.md"), "---\nname: frontmatter-helper\ndescription: Write notes.\n---\n");
+  const output = createOutput();
+  assert.equal(await runCli(["validate", "--path", dir], testRuntime(output)), 1);
+  assert.doesNotMatch(output.stderr.join("\n"), /Generated skill\.json/);
+});
+
 test("scan exits nonzero when package has blocking findings", async (t) => {
   const dir = await makeTempPackage();
   t.after(() => rm(dir, { recursive: true, force: true }));

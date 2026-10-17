@@ -82,9 +82,9 @@ export interface RegistryApiClientOptions {
 
 export type NativeMcpMethod = "skills/list" | "skills/get" | "resources/read";
 export const NATIVE_API_METADATA_BYTES = 512 * 1024;
-export const NATIVE_API_BUNDLE_BYTES = 10 * 1024 * 1024;
-/** Match the existing API package JSON body limit (ZIP base64 has overhead). */
-export const APPLICATION_API_REQUEST_BYTES = 14 * 1024 * 1024;
+export const NATIVE_API_BUNDLE_BYTES = 40 * 1024 * 1024;
+/** Match API JSON bounds, including text escaping and base64 image overhead. */
+export const APPLICATION_API_REQUEST_BYTES = 40 * 1024 * 1024;
 
 /** Each instance belongs to one native operation, including its deadline. */
 export function createNativeRegistryApiClient(options: RegistryApiClientOptions, signal: AbortSignal) {

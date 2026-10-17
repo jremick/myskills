@@ -3,6 +3,8 @@ import { performance } from "node:perf_hooks";
 import { MAX_SCAN_TEXT_LENGTH, hasBlockingFindings, scanTextForPackageRisks } from "../../src/scan.js";
 
 const cases: Record<string, { prefix?: string; repeat: string; suffix?: string; category?: string }> = {
+  "negated-transfer": { repeat: "Do not dump tokens. " },
+  "service-auth-prose": { repeat: "Send the OpenAI API key to https://api.openai.com for authentication. " },
   benign: { repeat: "Summarize notes into decisions, risks, and next actions. " },
   "curl-space": { repeat: "curl " },
   "wget-space": { repeat: "wget " },
@@ -12,7 +14,7 @@ const cases: Record<string, { prefix?: string; repeat: string; suffix?: string; 
   "url-without-command": { repeat: "http://" },
   "download-positive": { prefix: "curl ", repeat: "x", suffix: " |bash", category: "unsafe-command" },
   "decode-positive": { prefix: "base64 ", repeat: "-d ", suffix: " |zsh", category: "unsafe-command" },
-  "url-positive": { repeat: "curl-http://", suffix: "/token", category: "exfiltration" },
+  "url-positive": { repeat: "curl-http://", suffix: "/$TOKEN", category: "exfiltration" },
 };
 const testCase = cases[process.argv[2]];
 assert.ok(testCase, "Unknown performance case.");

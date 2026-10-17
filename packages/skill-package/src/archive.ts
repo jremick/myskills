@@ -4,6 +4,7 @@ import {
   scanPackageFiles, type PackageInputFile, type PackageScanResult,
 } from "./package-path.js";
 import { hasBlockingFindings } from "./scan.js";
+import { packageFileBytes } from "./assets.js";
 
 export class PackageArchiveScanError extends Error {
   constructor(readonly scan: PackageScanResult) {
@@ -29,7 +30,7 @@ export function encodePackageArchive(files: readonly PackageInputFile[]): Buffer
     if (normalizePackageFilePath(file.path) !== file.path) throw new Error("Archive paths must be canonical relative paths.");
     const name = Buffer.from(file.path, "utf8");
     if (name.toString("utf8") !== file.path || name.byteLength > 65_489) throw new Error("Archive filename exceeds the ZIP UTF-8 name limit.");
-    return { name, content: Buffer.from(file.content, "utf8") };
+    return { name, content: packageFileBytes(file) };
   }).sort((a, b) => Buffer.compare(a.name, b.name));
   const byteLength = entries.reduce((total, entry) => total + 76 + entry.name.byteLength * 2 + entry.content.byteLength, 22);
   if (byteLength > MAX_PACKAGE_ARCHIVE_BYTES) throw new Error(`Package archive exceeds ${MAX_PACKAGE_ARCHIVE_BYTES} bytes.`);
