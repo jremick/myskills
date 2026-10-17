@@ -104,6 +104,37 @@ test("host fixture rejects non-ASCII config text without rewriting the file", as
   assert.deepEqual(readdirSync(f.proof), ["config.json"]);
 });
 
+test("in-network fixture keeps the compose API prefix and rejects other hosts", async (t) => {
+  const remote = networkFixture(t, { api: "http://remote.invalid/api", web: "http://web:80" });
+  const rejected = await runNetworkFixture(remote, "create");
+  assert.notEqual(rejected.status, 0);
+  assert.match(rejected.output, /fixture-endpoint-invalid/);
+
+  const root = mkdtempSync(join(tmpdir(), "myskills-compose-endpoint-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const proof = join(root, "proof"); mkdirSync(proof, { mode: 0o700 });
+  const file = join(proof, "config.json");
+  const script = join(root, "fixture.mjs");
+  const seen = join(root, "seen.json");
+  const source = { version: "0.1.0-beta.19", commit: "a".repeat(40) };
+  writeFileSync(file, JSON.stringify({ api: "http://web:80/api", web: "http://web:80", expectedSource: source }), { mode: 0o600 });
+  writeFileSync(script, readFileSync(resolve("scripts/lib/self-host-fixture.mjs"), "utf8").replaceAll("/app/packages/auth/dist/index.js", pathToFileURL(resolve("packages/auth/dist/index.js")).href));
+  writeFileSync(join(root, "fetch.mjs"), `import {writeFileSync} from "node:fs";
+const seen = [];
+globalThis.fetch = async (url) => { seen.push(String(url)); writeFileSync(${JSON.stringify(seen)}, JSON.stringify(seen)); return new Response("", { status: 500 }); };
+`);
+  const child = spawnSync(process.execPath, ["--import", join(root, "fetch.mjs"), script, "create", file], { encoding: "utf8", timeout: 10_000 });
+  assert.notEqual(child.status, 0);
+  assert.doesNotMatch(`${child.stdout}${child.stderr}`, /fixture-endpoint-invalid/);
+  assert.deepEqual(JSON.parse(readFileSync(seen, "utf8")), ["http://web:80/api/version.json"]);
+
+  writeFileSync(file, JSON.stringify({ api: "http://api:3001", web: null, expectedSource: source }), { mode: 0o600 });
+  const direct = spawnSync(process.execPath, ["--import", join(root, "fetch.mjs"), script, "composed-storage", file], { encoding: "utf8", timeout: 10_000 });
+  assert.notEqual(direct.status, 0);
+  assert.doesNotMatch(`${direct.stdout}${direct.stderr}`, /fixture-endpoint-invalid/);
+  assert.deepEqual(JSON.parse(readFileSync(seen, "utf8")), ["http://api:3001/version.json"]);
+});
+
 test("host fixture refuses a symlinked config", async (t) => {
   const f = networkFixture(t, {});
   const link = join(f.proof, "config-link.json");

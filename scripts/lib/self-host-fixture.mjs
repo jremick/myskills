@@ -58,6 +58,20 @@ function loopbackTarget(value, protocol) {
     && !target.username && !target.password && !target.search && !target.hash, "fixture-loopback-target-invalid");
   return target;
 }
+// Compose rehearsal uses the owned service DNS names. Host-network restore uses loopback.
+// The returned value is one of those fixed bases, never the raw config string.
+function fixtureEndpoint(value, role) {
+  const target = new URL(value);
+  assert.ok(target.protocol === "http:" && !target.username && !target.password && !target.search && !target.hash, "fixture-endpoint-invalid");
+  const root = target.pathname === "" || target.pathname === "/";
+  // URL omits the default HTTP port, so ":80" and an omitted port are the same endpoint.
+  const httpPort = target.port || "80";
+  if (role === "api" && target.hostname === "web" && httpPort === "80" && target.pathname === "/api") return "http://web:80/api";
+  if (role === "web" && target.hostname === "web" && httpPort === "80" && root) return "http://web:80";
+  if (role === "api" && target.hostname === "api" && target.port === "3001" && root) return "http://api:3001";
+  if (target.hostname === "127.0.0.1" && target.port && root) return `http://127.0.0.1:${target.port}`;
+  throw new Error("fixture-endpoint-invalid");
+}
 async function hostPorts() {
   const listeners = [];
   try {
@@ -151,15 +165,8 @@ if (["host-ports", "api-ready", "restore-ready"].includes(mode)) {
     assert.ok(made, "isolated backup bucket creation failed");
   } finally { client.destroy(); }
 } else {
-  const apiTarget = loopbackTarget(data.api, "http:");
-  assert.ok(["", "/"].includes(apiTarget.pathname), "fixture-api-loopback-invalid");
-  const apiBase = apiTarget.origin;
-  let webBase = "";
-  if (data.web) {
-    const webTarget = loopbackTarget(data.web, "http:");
-    assert.ok(["", "/"].includes(webTarget.pathname), "fixture-web-loopback-invalid");
-    webBase = webTarget.origin;
-  }
+  const apiBase = fixtureEndpoint(data.api, "api");
+  const webBase = data.web ? fixtureEndpoint(data.web, "web") : "";
   const { generateTotpCode } = await import("/app/packages/auth/dist/index.js");
   let token;
   async function api(path, body, { anonymous = false, status = 200, raw = false, method = body ? "POST" : "GET" } = {}) {
