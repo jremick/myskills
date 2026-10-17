@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, sep } from "node:path";
 import test from "node:test";
 import { backupInvocationReceipt, captureHostDockerIdentity } from "../lib/host-backup-diagnostics.mjs";
 import { cleanupHostLedger, hostDocker, saveHostLedger } from "../lib/host-rehearsal-resources.mjs";
@@ -82,10 +83,12 @@ test("maintained rehearsal callers forward only the explicit backup contract and
   docker(["container", "inspect", "a".repeat(64)], options);
   assert.deepEqual(calls, [[f.executable, ["container", "inspect", "a".repeat(64)], options]]);
   const callFunction = source.slice(source.indexOf("function call("), source.indexOf("function reserve("));
-  const boundedCall = new Function("execFileSync", "assertHostCommandSucceeded", "root", `${callFunction}\nreturn call;`)(
-    (command, args, settings) => { assert.equal(command, f.executable); assert.deepEqual(args, ["network", "inspect", "b".repeat(64)]); assert.equal(settings.maxBuffer, options.maxBuffer); assert.equal(settings.timeout, options.timeout); assert.equal(settings.shell, false); return ""; },
+  const boundedCall = new Function("spawnSync", "assertHostCommandSucceeded", "root", `${callFunction}\nreturn call;`)(
+    (command, args, settings) => { assert.equal(command, f.executable); assert.deepEqual(args, ["network", "inspect", "b".repeat(64)]); assert.equal(settings.maxBuffer, options.maxBuffer); assert.equal(settings.timeout, options.timeout); assert.equal(settings.shell, false); assert.deepEqual(settings.stdio, ["ignore", "pipe", "pipe"]); return { status: 0, stdout: "", stderr: "" }; },
     () => {}, f.root);
   assert.equal(boundedCall(f.executable, ["network", "inspect", "b".repeat(64)], options).status, 0);
+  assert.throws(() => boundedCall(f.executable, ["ok\n"], options), /command-invalid/);
+  assert.throws(() => boundedCall(f.executable, ["ok"], { ...options, env: { PATH: "a\nb" } }), /command-invalid/);
 });
 test("same selected symlink executable supplies distinct client/server identities and a descriptor digest", t => {
   const f = fixture(t), selected = join(f.root, "selected-docker");
@@ -118,4 +121,63 @@ test("identity capture failures remain fixed, bounded diagnostics without raw ou
   const plain = join(f.root, "plain"); writeFileSync(plain, "secret-password", { mode: 0o600 });
   assert.equal(captureHostDockerIdentity(plain).executable.category, "not-executable");
   assert.doesNotMatch(JSON.stringify(failed), /secret-password|private-path|Env|PASSWORD|host-dispatch/);
+});
+test("docker lookup rejects relative PATH entries and will not exec the proof/bin shim", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "host-docker-path-")); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const source = readFileSync(new URL("../rehearse-self-host.mjs", import.meta.url), "utf8");
+  const fnText = source.slice(source.indexOf("function resolveDockerExecutable("), source.indexOf("\nconst executable = resolveDockerExecutable()"));
+  const relative = "relative-bin";
+  mkdirSync(join(root, relative));
+  writeFileSync(join(root, relative, "docker"), "#!/bin/sh\necho relative\n", { mode: 0o755 });
+  writeFileSync(join(root, "docker"), "#!/bin/sh\necho dot\n", { mode: 0o755 });
+  const absolute = join(root, "abs-bin"); mkdirSync(absolute);
+  const binary = join(absolute, "docker");
+  writeFileSync(binary, "#!/bin/sh\necho absolute\n", { mode: 0o755 });
+  const proof = join(root, "proof"); const shimDir = join(proof, "bin"); mkdirSync(shimDir, { recursive: true });
+  writeFileSync(join(shimDir, "docker"), "#!/bin/sh\necho shim\n", { mode: 0o755 });
+  const linkedDir = join(root, "linked-bin"); mkdirSync(linkedDir);
+  const target = join(root, "real-docker"); writeFileSync(target, "#!/bin/sh\necho real\n", { mode: 0o755 });
+  symlinkSync(target, join(linkedDir, "docker"));
+  // cwd is the temp root, so a missing isAbsolute check would execute ./docker and relative-bin/docker.
+  const program = `import { accessSync, constants, realpathSync, statSync } from "node:fs";
+import { isAbsolute, join, resolve, sep } from "node:path";
+${fnText}
+const proof = ${JSON.stringify(proof)};
+process.stdout.write(JSON.stringify({
+  dot: resolveDockerExecutable(".", proof),
+  relative: resolveDockerExecutable(${JSON.stringify(relative)}, proof),
+  mixed: resolveDockerExecutable(${JSON.stringify(`${relative}:${absolute}`)}, proof),
+  shim: resolveDockerExecutable(${JSON.stringify(`${shimDir}:${relative}`)}, proof),
+  shimThenAbsolute: resolveDockerExecutable(${JSON.stringify(`${shimDir}:${absolute}`)}, proof),
+  linked: resolveDockerExecutable(${JSON.stringify(linkedDir)}, proof),
+}));
+`;
+  const run = spawnSync(process.execPath, ["--input-type=module", "-e", program], { cwd: root, encoding: "utf8", timeout: 10_000 });
+  assert.equal(run.status, 0, run.stderr);
+  const cases = JSON.parse(run.stdout);
+  assert.equal(cases.dot, "");
+  assert.equal(cases.relative, "");
+  assert.equal(cases.mixed, realpathSync(binary));
+  assert.equal(cases.shim, "");
+  assert.equal(cases.shimThenAbsolute, realpathSync(binary));
+  assert.equal(cases.linked, realpathSync(target));
+  assert.equal(isAbsolute(cases.linked), true);
+  assert.equal(cases.linked.startsWith(`${shimDir}${sep}`), false);
+});
+test("rehearsal call captures child stderr and does not leak it to the parent", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "host-call-stderr-")); t.after(() => rmSync(root, { recursive: true, force: true }));
+  const source = readFileSync(new URL("../rehearse-self-host.mjs", import.meta.url), "utf8");
+  const callFunction = source.slice(source.indexOf("function call("), source.indexOf("function reserve("));
+  const program = `import { spawnSync } from "node:child_process";
+const assertHostCommandSucceeded = () => { throw new Error("should-not-run"); };
+const root = ${JSON.stringify(root)};
+${callFunction}
+const result = call(process.execPath, ["-e", "process.stderr.write('STDERR_CANARY'); process.stdout.write('ok');"], { ok: false, timeout: 5000 });
+if (result.status !== 0 || result.stdout !== "ok" || result.stderr !== "STDERR_CANARY") process.exit(2);
+process.stdout.write("captured");
+`;
+  const run = spawnSync(process.execPath, ["--input-type=module", "-e", program], { encoding: "utf8", timeout: 10_000 });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(run.stdout, "captured");
+  assert.doesNotMatch(run.stderr ?? "", /STDERR_CANARY/);
 });

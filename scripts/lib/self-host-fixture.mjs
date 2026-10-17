@@ -2,31 +2,52 @@
 // Fixture credentials, tokens, MFA seeds and package contents stay in /proof.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
+import { basename, dirname, join, sep } from "node:path";
 
 const require = createRequire(import.meta.url);
 const [mode, configPath] = process.argv.slice(2);
+if (lstatSync(configPath).isSymbolicLink()) throw new Error("fixture-config-symlink");
 const configRealPath = realpathSync(configPath);
+const proofRoot = realpathSync(dirname(configPath));
+assert.ok(basename(proofRoot) === "proof" && configRealPath.startsWith(`${proofRoot}${sep}`), "fixture-config-outside-proof");
 const data = JSON.parse(readFileSync(configRealPath, "utf8"));
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const FIXTURE_CONFIG_LIMIT = 1_048_576;
 const FIXTURE_RESPONSE_LIMIT = 8 * 1024 * 1024;
 const save = () => {
   const serialized = `${JSON.stringify(data)}\n`;
-  if (serialized.length > FIXTURE_CONFIG_LIMIT || realpathSync(configPath) !== configRealPath) throw new Error("fixture-config-invalid");
+  if (lstatSync(configPath).isSymbolicLink() || realpathSync(configPath) !== configRealPath) throw new Error("fixture-config-invalid");
+  if (serialized.length > FIXTURE_CONFIG_LIMIT) throw new Error("fixture-config-invalid");
   // Fully anchored printable ASCII. Remote fields are persisted only after this check.
   if (/^[ -~]+\n$/.test(serialized)) {
-    writeFileSync(configRealPath, serialized, { mode: 0o600 });
+    const temporary = join(proofRoot, `.${basename(configRealPath)}.${randomBytes(8).toString("hex")}.tmp`);
+    writeFileSync(temporary, serialized, { flag: "wx", mode: 0o600 });
+    renameSync(temporary, configRealPath);
     return;
   }
   throw new Error("fixture-config-invalid");
 };
 async function readBounded(response, limit) {
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (bytes.length > limit) throw new Error("fixture-response-limit");
-  return bytes;
+  const declared = response.headers.get("content-length");
+  if (declared !== null && (!/^\d{1,8}$/.test(declared) || Number(declared) > limit)) {
+    await response.body?.cancel();
+    throw new Error("fixture-response-limit");
+  }
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of response.body ?? []) {
+    const bytes = Buffer.from(chunk);
+    size += bytes.byteLength;
+    if (size > limit) {
+      await response.body?.cancel();
+      throw new Error("fixture-response-limit");
+    }
+    chunks.push(bytes);
+  }
+  return Buffer.concat(chunks);
 }
 
 // These helpers execute in Docker's host namespace, which can differ from the
@@ -60,12 +81,10 @@ async function apiReady() {
       const health = await fetch(new URL("/ready", target), options); await health.body?.cancel();
       if (health.status === 200) {
         const version = await fetch(new URL("/version.json", target), options); assert.equal(version.status, 200);
-        let size = 0; const chunks = [];
-        for await (const chunk of version.body) { size += chunk.byteLength; assert.ok(size <= 4096, "fixture-version-size-invalid"); chunks.push(Buffer.from(chunk)); }
-        const observed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        const observed = JSON.parse((await readBounded(version, 4096)).toString("utf8"));
         assert.deepEqual(observed, { version: data.expectedSource.version, revision: data.expectedSource.commit }); return;
       }
-    } catch (error) { if (error.code === "ERR_ASSERTION" || error instanceof SyntaxError) throw error; }
+    } catch (error) { if (error.code === "ERR_ASSERTION" || error instanceof SyntaxError || error.message === "fixture-response-limit") throw error; }
     await new Promise(done => setTimeout(done, Math.min(100, Math.max(0, until - Date.now()))));
   }
   throw new Error("fixture-api-readiness-deadline");
@@ -132,22 +151,32 @@ if (["host-ports", "api-ready", "restore-ready"].includes(mode)) {
     assert.ok(made, "isolated backup bucket creation failed");
   } finally { client.destroy(); }
 } else {
+  const apiTarget = loopbackTarget(data.api, "http:");
+  assert.ok(["", "/"].includes(apiTarget.pathname), "fixture-api-loopback-invalid");
+  const apiBase = apiTarget.origin;
+  let webBase = "";
+  if (data.web) {
+    const webTarget = loopbackTarget(data.web, "http:");
+    assert.ok(["", "/"].includes(webTarget.pathname), "fixture-web-loopback-invalid");
+    webBase = webTarget.origin;
+  }
   const { generateTotpCode } = await import("/app/packages/auth/dist/index.js");
   let token;
   async function api(path, body, { anonymous = false, status = 200, raw = false, method = body ? "POST" : "GET" } = {}) {
-    const response = await fetch(`${data.api}${path}`, { method, headers: {
+    const response = await fetch(`${apiBase}${path}`, { redirect: "error", method, headers: {
       ...(token && !anonymous ? { authorization: `Bearer ${token}` } : {}), ...(body ? { "content-type": "application/json" } : {}),
     }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15_000) });
     assert.equal(response.status, status, `HTTP ${path} expected ${status}; returned ${response.status}`);
-    if (response.status === 204) return null;
+    if (response.status === 204) { await response.body?.cancel(); return null; }
     const bytes = await readBounded(response, raw ? FIXTURE_RESPONSE_LIMIT : FIXTURE_CONFIG_LIMIT);
     return raw ? bytes : JSON.parse(bytes.toString("utf8"));
   }
   const source = await api("/version.json");
   assert.deepEqual(source, { version: data.expectedSource.version, revision: data.expectedSource.commit });
-  if (data.web) {
-    const web = await fetch(`${data.web}/version.json`, { signal: AbortSignal.timeout(10_000) });
-    assert.ok(web.ok); assert.deepEqual(await web.json(), source);
+  if (webBase) {
+    const web = await fetch(`${webBase}/version.json`, { redirect: "error", signal: AbortSignal.timeout(10_000) });
+    assert.ok(web.ok);
+    assert.deepEqual(JSON.parse((await readBounded(web, 4096)).toString("utf8")), source);
   }
   const capability = await api("/v1/capabilities");
   if (mode === "create") data.instanceId = capability.instanceId;

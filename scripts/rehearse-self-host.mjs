@@ -2,13 +2,13 @@
 // Internal fixture only. Called by the canonical railway-images job, with its
 // existing app images. No credentials or raw Docker/provider output are exported.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { accessSync, constants, copyFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { accessSync, constants, copyFileSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { request as httpsRequest } from "node:https";
 import { arch, platform } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve, sep } from "node:path";
 import { createSelfHostBundle } from "./lib/self-host-release.mjs";
 import { hostBaselineCommit, resolveHostBaseline } from "./lib/self-host-baseline.mjs";
 import { hostDocker, saveHostLedger } from "./lib/host-rehearsal-resources.mjs";
@@ -28,7 +28,23 @@ const receipt = { schemaVersion: 1, kind: "myskills-host-rehearsal", status: "fa
   arm64: "unverified", operatorUpgradeFromBaseline: "not-tested-no-baseline-operator-bundle", phases: {}, images: {} };
 let phase = "preconditions";
 let sequence = 0;
-const executable = (process.env.PATH ?? "").split(platform() === "win32" ? ";" : ":").filter((dir) => dir.length > 0 && !/[\0\r\n]/.test(dir)).map((dir) => join(dir, platform() === "win32" ? "docker.exe" : "docker")).find((dockerPath) => { try { accessSync(dockerPath, constants.X_OK); return statSync(dockerPath).isFile(); } catch { return false; } }) ?? "";
+function resolveDockerExecutable(pathValue = process.env.PATH ?? "", proofDir = proof) {
+  const blocked = resolve(proofDir, "bin");
+  for (const dir of String(pathValue).split(":")) {
+    if (dir.length === 0 || /[\0\r\n]/.test(dir) || !isAbsolute(dir)) continue;
+    const candidate = join(dir, "docker");
+    let resolved;
+    try {
+      accessSync(candidate, constants.X_OK);
+      resolved = realpathSync(candidate);
+      if (!statSync(resolved).isFile() || !isAbsolute(resolved)) continue;
+    } catch { continue; }
+    if (resolved === blocked || resolved.startsWith(blocked + sep)) continue;
+    return resolved;
+  }
+  return "";
+}
+const executable = resolveDockerExecutable();
 receipt.dockerIdentity = captureHostDockerIdentity(executable);
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const jsonFile = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
@@ -37,9 +53,10 @@ const privateEnv = (path, values) => {
   writeFileSync(path, Object.entries(values).map(([key, value]) => `${key}='${value}'\n`).join(""), { mode: 0o600 });
 };
 function call(command, args, { cwd = root, env = process.env, timeout = 600_000, maxBuffer = 4 * 1024 * 1024, killSignal = "SIGTERM", ok = true } = {}) {
-  if (typeof command !== "string" || command.length === 0 || /[\0\r\n]/.test(command) || !Array.isArray(args) || args.some((arg) => typeof arg !== "string" || arg.includes("\0")) || Object.entries(env ?? {}).some(([key, value]) => typeof key !== "string" || /[\0\r\n]/.test(key) || (typeof value === "string" && value.includes("\0")))) throw new Error("command-invalid");
-  let result; try { result = { status: 0, stdout: execFileSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer, killSignal, shell: false }) ?? "", stderr: "", signal: null }; } catch (error) { const spawned = typeof error.status !== "number"; result = { status: spawned ? null : error.status, stdout: typeof error.stdout === "string" ? error.stdout : "", stderr: typeof error.stderr === "string" ? error.stderr : "", signal: error.signal ?? null, error: spawned ? error : null }; }
-  if (ok) assertHostCommandSucceeded(command, args, result); return result;
+  if (typeof command !== "string" || command.length === 0 || /[\0\r\n]/.test(command) || !Array.isArray(args) || args.some((arg) => typeof arg !== "string" || /[\0\r\n]/.test(arg)) || Object.entries(env ?? {}).some(([key, value]) => typeof key !== "string" || typeof value !== "string" || /[\0\r\n]/.test(key) || /[\0\r\n]/.test(value))) throw new Error("command-invalid");
+  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer, killSignal, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+  if (ok) assertHostCommandSucceeded(command, args, result);
+  return result;
 }
 function reserve(kind, name) {
   // The shim appends operator containers while this process waits for it.
@@ -241,8 +258,11 @@ try {
   const baselineSource = resolveHostBaseline(root, join(proof, "baseline-source.git"));
   receipt.baselineSource = { commit: baselineSource.commit, mode: baselineSource.mode, publicSource: baselineSource.publicSource ?? null };
   mkdirSync(join(proof, "bin"));
+  const shimPath = join(proof, "bin", "docker");
+  // The shim must invoke the resolved docker binary. Baking proof/bin/docker back in would exec the shim forever.
+  assert.ok(isAbsolute(executable) && realpathSync(executable) === executable && !executable.startsWith(resolve(proof, "bin") + sep));
   const shim = `#!${process.execPath}\nimport {hostDocker} from ${JSON.stringify(join(root, "scripts/lib/host-rehearsal-resources.mjs"))};\nconst r=hostDocker(${JSON.stringify(ledgerPath)},${JSON.stringify(executable)},process.argv.slice(2));process.exit(r.status??1);\n`;
-  writeFileSync(join(proof, "bin/docker"), shim, { mode: 0o755 });
+  writeFileSync(shimPath, shim, { mode: 0o755 });
   copyFileSync(join(root, "scripts/lib/self-host-fixture.mjs"), join(proof, "fixture.mjs"));
   const source = { commit: candidate, version: JSON.parse(readFileSync(join(root, "package.json"))).version };
   const registryPort = await port();

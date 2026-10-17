@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -59,9 +59,66 @@ test("host fixture readiness requires loopback, healthy HTTP and the exact API s
   writeFileSync(join(tmpdir(), `myskills-host-network-controls-${process.version}.json`), `${JSON.stringify({ schemaVersion: 1, node: process.version, scope: "local-real-sockets-and-http-not-Docker-runtime", outcomes }, null, 2)}\n`, { mode: 0o600 });
 });
 
+test("host fixture rejects an oversized streamed body and an oversized Content-Length before reading it", async (t) => {
+  const source = { commit: "a".repeat(40), version: "0.1.0-beta.19" };
+  const streamed = createHttpServer((request, response) => {
+    if (request.url === "/ready") { response.writeHead(200); response.end("ready"); return; }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.write("x".repeat(3000));
+    response.end("y".repeat(3000));
+  });
+  await new Promise(done => streamed.listen(0, "127.0.0.1", done));
+  const streamedFixture = networkFixture(t, { api: `http://127.0.0.1:${streamed.address().port}`, expectedSource: source, timeoutMs: 400 });
+  const streamedResult = await runNetworkFixture(streamedFixture, "api-ready");
+  await new Promise(done => streamed.close(done));
+  assert.notEqual(streamedResult.status, 0, "a chunked body over 4096 bytes must fail readiness");
+
+  let wroteBody = false;
+  let holdBody;
+  const declared = createHttpServer((request, response) => {
+    if (request.url === "/ready") { response.writeHead(200); response.end("ready"); return; }
+    response.writeHead(200, { "content-type": "application/json", "content-length": "1048576" });
+    response.flushHeaders();
+    holdBody = setTimeout(() => { wroteBody = true; if (!response.writableEnded) response.end("{}"); }, 1500);
+    response.on("close", () => clearTimeout(holdBody));
+  });
+  await new Promise(done => declared.listen(0, "127.0.0.1", done));
+  const declaredFixture = networkFixture(t, { api: `http://127.0.0.1:${declared.address().port}`, expectedSource: source, timeoutMs: 2000 });
+  const started = Date.now();
+  const declaredResult = await runNetworkFixture(declaredFixture, "api-ready");
+  const elapsed = Date.now() - started;
+  clearTimeout(holdBody);
+  await new Promise(done => declared.close(done));
+  assert.notEqual(declaredResult.status, 0, "Content-Length above the cap must fail readiness");
+  assert.equal(wroteBody, false);
+  assert.ok(elapsed < 1200, `oversized Content-Length must be rejected before the body is sent (${elapsed}ms)`);
+});
+
+test("host fixture rejects non-ASCII config text without rewriting the file", async (t) => {
+  const original = JSON.stringify({ note: "café" });
+  const f = networkFixture(t, { note: "café" });
+  assert.equal(readFileSync(f.file, "utf8"), original);
+  const result = await runNetworkFixture(f, "host-ports");
+  assert.notEqual(result.status, 0);
+  assert.equal(readFileSync(f.file, "utf8"), original);
+  assert.deepEqual(readdirSync(f.proof), ["config.json"]);
+});
+
+test("host fixture refuses a symlinked config", async (t) => {
+  const f = networkFixture(t, {});
+  const link = join(f.proof, "config-link.json");
+  symlinkSync(f.file, link);
+  const before = readFileSync(f.file);
+  const result = await runNetworkFixture({ file: link, proof: f.proof }, "host-ports");
+  assert.notEqual(result.status, 0);
+  assert.match(result.output, /fixture-config-symlink/);
+  assert.deepEqual(readFileSync(f.file), before);
+});
+
 function networkFixture(t, data) {
   const root = mkdtempSync(join(tmpdir(), "myskills-network-proof-")); t.after(() => rmSync(root, { recursive: true, force: true }));
-  const file = join(root, "proof.json"); writeFileSync(file, JSON.stringify(data), { mode: 0o600 }); return { file };
+  const proof = join(root, "proof"); mkdirSync(proof, { mode: 0o700 });
+  const file = join(proof, "config.json"); writeFileSync(file, JSON.stringify(data), { mode: 0o600 }); return { file, proof };
 }
 function runNetworkFixture(f, mode) {
   return new Promise((done, reject) => {
@@ -79,11 +136,12 @@ test("restore driver requires real TOTP plus recovery, authenticated non-owner d
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const bytes = Buffer.from("disposable private package bytes");
     const source = { version: "0.1.0-beta.19", commit: "a".repeat(40) };
-    const file = join(root, "proof.json"), script = join(root, "fixture.mjs"), preload = join(root, "fetch.mjs"), trace = join(root, "trace.json");
+    const proof = join(root, "proof"); mkdirSync(proof, { mode: 0o700 });
+    const file = join(proof, "config.json"), script = join(root, "fixture.mjs"), preload = join(root, "fetch.mjs"), trace = join(root, "trace.json");
     const evaluation = { slug: "host-fresh", version: "1.0.0", suiteBinding: failure === "absent-suite-binding" ? undefined : { revisionId: "original-suite-revision", sha256: "b".repeat(64) }, record: { id: "eval", versionId: "submission", createdAt: "2026-10-01T00:00:00.000Z", summary: { artifactSha256: "a".repeat(64), runner: { id: "package-static", version: "1" }, provenance: "api-owned", status: "skipped", totals: { pass: 3, fail: 0, warning: 0, skipped: 1, incompatible: 0 } } } };
     const auth = pathToFileURL(resolve("packages/auth/dist/index.js")).href;
     writeFileSync(script, readFileSync(resolve("scripts/lib/self-host-fixture.mjs"), "utf8").replaceAll("/app/packages/auth/dist/index.js", auth));
-    writeFileSync(file, JSON.stringify({ api: "http://fixture.invalid", expectedSource: source,
+    writeFileSync(file, JSON.stringify({ api: "http://127.0.0.1:9", expectedSource: source,
       instanceId: "11111111-1111-4111-8111-111111111111", ownerId: "owner", SEED_OWNER_EMAIL: "owner@operator.test", SEED_OWNER_PASSWORD: randomBytes(24).toString("hex"),
       mfaSecret: createTotpSecret(), enrolledTotpCounter: Math.floor(Date.now() / 30_000) - 1, recoveryCodes: ["disposable-recovery"], revokedSessionToken: randomBytes(24).toString("hex"),
       nonowner: { id: "nonowner", email: "nonowner@operator.test", password: randomBytes(24).toString("hex") },
