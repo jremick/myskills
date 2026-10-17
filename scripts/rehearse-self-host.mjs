@@ -165,7 +165,8 @@ function compose(bundle, config, project, args) {
       MYSKILLS_BOOTSTRAP_ENV_FILE: join(config, "bootstrap.env"), MYSKILLS_BACKUP_ENV_FILE: join(config, "backup.env") } });
 }
 function operator(bundle, config, args, ok = true) {
-  return call("sh", [join(bundle, "myskills.sh"), ...args, "--config-dir", config], { ok, env: { ...process.env, PATH: `${join(proof, "bin")}:${process.env.PATH}` } });
+  // myskills.sh is mode 0755 and has a shebang. Running that file keeps `call` from pairing a literal `sh` with a `-c` argument from another call site.
+  return call(join(bundle, "myskills.sh"), [...args, "--config-dir", config], { ok, env: { ...process.env, PATH: `${join(proof, "bin")}:${process.env.PATH}` } });
 }
 function operatorJson(bundle, config, args) {
   const result = operator(bundle, config, args);
