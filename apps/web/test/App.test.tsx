@@ -1602,7 +1602,6 @@ test("architecture editor previews an unsaved draft through the API with its rev
   });
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByTestId("architecture-editor");
   await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Edited review router" } });
   fireEvent.click(view.getByRole("button", { name: "Preview draft" }));
@@ -1656,7 +1655,6 @@ test("an initial server preview settling around an edit preserves the unsaved ed
     });
     client.previewArchitecture = async () => initialPreview;
     const view = render(<RegistryApp client={client} />);
-    await view.findByTestId("architecture-editor");
     await openArchitectureWorkbench(view);
     assert.equal(view.queryByText("Skills available in this context"), null);
 
@@ -1696,7 +1694,6 @@ test("team members receive a read-only architecture editor without revision cont
   });
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByTestId("architecture-editor");
   assert.equal(view.queryByRole("link", { name: "Open workbench" }), null);
   await openArchitectureWorkbench(view, "Inspect in workbench");
   assert.equal(view.getByRole("heading", { name: "Inspect this architecture" }).textContent, "Inspect this architecture");
@@ -1719,7 +1716,6 @@ test("architecture editor preserves its draft when the optimistic save conflicts
   });
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByTestId("architecture-editor");
   await openArchitectureWorkbench(view);
   const label = view.getByLabelText("Selected node label") as HTMLInputElement;
   fireEvent.input(label, { target: { value: "Draft kept after conflict" } });
@@ -1747,7 +1743,6 @@ test("architecture editor sends the immutable revision token and refreshes after
   };
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByTestId("architecture-editor");
   await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Saved review router" } });
   fireEvent.input(view.getByLabelText("Draft revision message"), { target: { value: "Clarify review routing" } });
@@ -1801,7 +1796,6 @@ test("unsaved architecture edits guard selection and beforeunload navigation", a
   });
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByTestId("architecture-editor");
   await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Unsaved router" } });
   await view.findByText("Unsaved changes");
@@ -1841,7 +1835,6 @@ test("unsaved architecture edits guard browser back without duplicate prompts", 
 
   await view.findByText("Release Notes Helper");
   fireEvent.click(view.getAllByRole("link", { name: "Architectures" })[0]!);
-  await view.findByTestId("architecture-editor");
   await openArchitectureWorkbench(view);
   fireEvent.input(view.getByLabelText("Selected node label"), { target: { value: "Unsaved browser draft" } });
   await view.findByText("Unsaved changes");
@@ -2055,7 +2048,6 @@ test("stale exact-release responses cannot replace the release selected for a ne
   });
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByTestId("architecture-editor");
   await openArchitectureWorkbench(view);
   fireEvent.click(view.getByText("Add exact release"));
   fireEvent.input(within(view.getByTestId("architecture-editor")).getByLabelText("Search skills"), { target: { value: "skill" } });
@@ -2080,7 +2072,6 @@ test("router release picker requires an explicit parent and creates a routes edg
   const client = mockClient({ skills: [skill], searchResults: () => [skill], registryReleases: { "audit-helper": [releaseRow] }, releaseMetadata: { "audit-helper@1.2.3": exactRelease } });
   const view = render(<RegistryApp client={client} />);
 
-  await view.findByTestId("architecture-editor");
   await openArchitectureWorkbench(view);
   fireEvent.click(view.getByText("Add exact release"));
   fireEvent.input(within(view.getByTestId("architecture-editor")).getByLabelText("Search skills"), { target: { value: "audit" } });

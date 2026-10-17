@@ -2946,7 +2946,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -3047,7 +3047,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 321,
+            "line": 346,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -3369,7 +3369,7 @@
         "checks": [
           {
             "path": "apps/web/test/App.test.tsx",
-            "line": 2207,
+            "line": 2198,
             "execution": "prepared_not_run_on_final_commit",
             "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx"
           },
@@ -3619,7 +3619,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 321,
+            "line": 346,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -3789,7 +3789,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -8012,7 +8012,7 @@
         "checks": [
           {
             "path": "apps/web/test/App.test.tsx",
-            "line": 2102,
+            "line": 2093,
             "execution": "prepared_not_run_on_final_commit",
             "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx"
           },
@@ -8573,7 +8573,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 369,
+            "line": 394,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -13076,7 +13076,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -13958,7 +13958,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 201,
+            "line": 221,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -15408,7 +15408,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -15591,7 +15591,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 321,
+            "line": 346,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -15879,7 +15879,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 201,
+            "line": 221,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -16031,7 +16031,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 369,
+            "line": 394,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -18547,7 +18547,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -18660,7 +18660,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 201,
+            "line": 221,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -18773,7 +18773,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -18886,7 +18886,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 369,
+            "line": 394,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -18999,7 +18999,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 201,
+            "line": 221,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -19112,7 +19112,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -19225,7 +19225,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 369,
+            "line": 394,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -20883,7 +20883,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 321,
+            "line": 346,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -21491,7 +21491,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -23097,7 +23097,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -23168,7 +23168,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }
@@ -23488,7 +23488,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 36,
+            "line": 54,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -23942,7 +23942,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 321,
+            "line": 346,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           },
@@ -29929,7 +29929,7 @@
           },
           {
             "path": "scripts/rehearse-self-host.mjs",
-            "line": 201,
+            "line": 221,
             "execution": "prepared_not_run_on_final_commit",
             "command": "node scripts/rehearse-self-host.mjs"
           }

@@ -4,11 +4,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { accessSync, constants, copyFileSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { request as httpsRequest } from "node:https";
 import { arch, platform } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve, sep } from "node:path";
 import { createSelfHostBundle } from "./lib/self-host-release.mjs";
 import { hostBaselineCommit, resolveHostBaseline } from "./lib/self-host-baseline.mjs";
 import { hostDocker, saveHostLedger } from "./lib/host-rehearsal-resources.mjs";
@@ -28,7 +28,25 @@ const receipt = { schemaVersion: 1, kind: "myskills-host-rehearsal", status: "fa
   arm64: "unverified", operatorUpgradeFromBaseline: "not-tested-no-baseline-operator-bundle", phases: {}, images: {} };
 let phase = "preconditions";
 let sequence = 0;
-const executable = (spawnSync("sh", ["-c", "command -v docker"], { encoding: "utf8", timeout: 10_000, maxBuffer: 4096 }).stdout ?? "").trim();
+function resolveDockerExecutable(dockerBin = process.env.DOCKER_BIN, proofDir = proof) {
+  // Fixed absolute locations only. PATH is not consulted, and DOCKER_BIN is accepted only when it is one of these paths.
+  const allowList = ["/usr/bin/docker", "/usr/local/bin/docker", "/opt/homebrew/bin/docker"];
+  const blocked = resolve(proofDir, "bin");
+  const requested = typeof dockerBin === "string" ? dockerBin : "";
+  for (const allowed of allowList) {
+    if (requested !== "" && requested !== allowed) continue;
+    let resolved;
+    try {
+      accessSync(allowed, constants.X_OK);
+      resolved = realpathSync(allowed);
+      if (!statSync(resolved).isFile() || !isAbsolute(resolved)) continue;
+    } catch { continue; }
+    if (resolved === blocked || resolved.startsWith(`${blocked}${sep}`)) continue;
+    return allowed;
+  }
+  return "";
+}
+const executable = resolveDockerExecutable();
 receipt.dockerIdentity = captureHostDockerIdentity(executable);
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const jsonFile = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
@@ -37,7 +55,8 @@ const privateEnv = (path, values) => {
   writeFileSync(path, Object.entries(values).map(([key, value]) => `${key}='${value}'\n`).join(""), { mode: 0o600 });
 };
 function call(command, args, { cwd = root, env = process.env, timeout = 600_000, maxBuffer = 4 * 1024 * 1024, killSignal = "SIGTERM", ok = true } = {}) {
-  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer, killSignal });
+  if (typeof command !== "string" || command.length === 0 || /[\0\r\n]/.test(command) || !Array.isArray(args) || args.some((arg) => typeof arg !== "string" || /[\0\r\n]/.test(arg)) || Object.entries(env ?? {}).some(([key, value]) => typeof key !== "string" || typeof value !== "string" || /[\0\r\n]/.test(key) || /[\0\r\n]/.test(value))) throw new Error("command-invalid");
+  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer, killSignal, shell: false, stdio: ["ignore", "pipe", "pipe"] });
   if (ok) assertHostCommandSucceeded(command, args, result);
   return result;
 }
@@ -148,7 +167,8 @@ function compose(bundle, config, project, args) {
       MYSKILLS_BOOTSTRAP_ENV_FILE: join(config, "bootstrap.env"), MYSKILLS_BACKUP_ENV_FILE: join(config, "backup.env") } });
 }
 function operator(bundle, config, args, ok = true) {
-  return call("sh", [join(bundle, "myskills.sh"), ...args, "--config-dir", config], { ok, env: { ...process.env, PATH: `${join(proof, "bin")}:${process.env.PATH}` } });
+  // myskills.sh is mode 0755 and has a shebang. Running that file keeps `call` from pairing a literal `sh` with a `-c` argument from another call site.
+  return call(join(bundle, "myskills.sh"), [...args, "--config-dir", config], { ok, env: { ...process.env, PATH: `${join(proof, "bin")}:${process.env.PATH}` } });
 }
 function operatorJson(bundle, config, args) {
   const result = operator(bundle, config, args);
@@ -241,8 +261,13 @@ try {
   const baselineSource = resolveHostBaseline(root, join(proof, "baseline-source.git"));
   receipt.baselineSource = { commit: baselineSource.commit, mode: baselineSource.mode, publicSource: baselineSource.publicSource ?? null };
   mkdirSync(join(proof, "bin"));
+  const shimPath = join(proof, "bin", "docker");
+  // The shim must invoke the allow-listed docker binary. Baking proof/bin/docker back in would exec the shim forever.
+  const resolvedExecutable = realpathSync(executable);
+  assert.ok(["/usr/bin/docker", "/usr/local/bin/docker", "/opt/homebrew/bin/docker"].includes(executable)
+    && isAbsolute(resolvedExecutable) && resolvedExecutable !== resolve(proof, "bin") && !resolvedExecutable.startsWith(resolve(proof, "bin") + sep));
   const shim = `#!${process.execPath}\nimport {hostDocker} from ${JSON.stringify(join(root, "scripts/lib/host-rehearsal-resources.mjs"))};\nconst r=hostDocker(${JSON.stringify(ledgerPath)},${JSON.stringify(executable)},process.argv.slice(2));process.exit(r.status??1);\n`;
-  writeFileSync(join(proof, "bin/docker"), shim, { mode: 0o755 });
+  writeFileSync(shimPath, shim, { mode: 0o755 });
   copyFileSync(join(root, "scripts/lib/self-host-fixture.mjs"), join(proof, "fixture.mjs"));
   const source = { commit: candidate, version: JSON.parse(readFileSync(join(root, "package.json"))).version };
   const registryPort = await port();
