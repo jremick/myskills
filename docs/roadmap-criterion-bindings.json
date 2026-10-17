@@ -1814,8 +1814,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -1901,8 +1901,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 342,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 346,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -2091,8 +2091,8 @@
       "checks": [
         {
           "path": "apps/web/test/App.test.tsx",
-          "line": 2207,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "line": 2198,
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"maintainer sessions download an artifact hash before approving review submissions\", async (t) => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -2248,8 +2248,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 342,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 346,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -2304,7 +2304,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 419,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(`server-valid version ${version} loads as ${pinned ? \"an exact pin\" : \"the default latest\"}`, async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -2356,8 +2356,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -4352,7 +4352,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 224,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"an explicit authorized skill URL survives a result page that excludes it\", async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -4391,7 +4391,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 234,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"registry pagination reaches later skills without replacing the selected detail\", async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -4543,7 +4543,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 101,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"landing setting keeps a failed draft, discards it, and confirms a successful save\", async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -4660,7 +4660,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 1190,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"non-admin sessions do not render the admin entry point\", async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -4738,7 +4738,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 364,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"skill detail displays public metadata and release artifact metadata only\", async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -4777,7 +4777,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 1086,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"MFA login verifies the challenge before storing a session\", async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -4867,7 +4867,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 419,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(`server-valid version ${version} loads as ${pinned ? \"an exact pin\" : \"the default latest\"}`, async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -4974,7 +4974,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 759,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"MFA-verified managers load lifecycle and sharing controls without a second release read\", async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -5013,7 +5013,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 1157,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"settings can create and revoke API keys\", async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -5051,8 +5051,8 @@
       "checks": [
         {
           "path": "apps/web/test/App.test.tsx",
-          "line": 2102,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "line": 2093,
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"admin sessions can manage registration, users, and provider metadata\", async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -5204,7 +5204,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 861,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(\"platform selection changes CLI export guidance only\", async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -5413,8 +5413,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 390,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 394,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8319,8 +8319,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8864,8 +8864,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 219,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 221,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9717,8 +9717,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9831,8 +9831,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 342,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 346,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -10003,8 +10003,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 219,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 221,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -10109,8 +10109,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 390,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 394,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11641,8 +11641,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11728,8 +11728,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 219,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 221,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11815,8 +11815,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11902,8 +11902,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 390,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 394,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -11989,8 +11989,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 219,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 221,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -12076,8 +12076,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -12163,8 +12163,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 390,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 394,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "const dirs = readdirSync(config).filter((name) => /^myskills-recovery-/.test(name)); assert.equal(dirs.length, 1);",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -13371,8 +13371,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 342,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 346,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -13774,8 +13774,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14598,7 +14598,7 @@
         {
           "path": "apps/web/test/App.test.tsx",
           "line": 1026,
-          "sha256": "ea41af96d84ce8019d9f00fd8b073d3d4c6e3d6b8cff2ed775c9e3698d59e581",
+          "sha256": "614536825fa22c83c536a9a37c19a9f3ff65cc7653a4e429ad81385dc1e688a0",
           "anchor": "test(`current-user refresh preserves the session on ${failure.message}`, async () => {",
           "command": "cd apps/web && node --import tsx --import ./test/setup-dom.ts --test test/App.test.tsx",
           "execution": "prepared_not_run_on_final_commit"
@@ -14812,8 +14812,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14857,8 +14857,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15053,8 +15053,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 52,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 54,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(Object.values(values).every((value) => typeof value === \"string\" && !/['\\\\\\n\\r\\0]/.test(value)));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -15354,8 +15354,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 342,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 346,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "const composedEnv = join(proof, \"fresh-composed-db.env\"); assert.ok(!/[\\r\\n$]/.test(composedDatabase));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -19234,8 +19234,8 @@
         },
         {
           "path": "scripts/rehearse-self-host.mjs",
-          "line": 219,
-          "sha256": "418039cd4d275140a393af6d2ad5016ed33cb47b94374e02042e223326e08f01",
+          "line": 221,
+          "sha256": "4414eef014c8e1438537a256f16a2c683a1235175a1e950673d7ed4c4ba604e7",
           "anchor": "assert.ok(!/[\\r\\n$]/.test(database));",
           "command": "node scripts/rehearse-self-host.mjs",
           "execution": "prepared_not_run_on_final_commit"

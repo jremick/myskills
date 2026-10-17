@@ -28,19 +28,21 @@ const receipt = { schemaVersion: 1, kind: "myskills-host-rehearsal", status: "fa
   arm64: "unverified", operatorUpgradeFromBaseline: "not-tested-no-baseline-operator-bundle", phases: {}, images: {} };
 let phase = "preconditions";
 let sequence = 0;
-function resolveDockerExecutable(pathValue = process.env.PATH ?? "", proofDir = proof) {
+function resolveDockerExecutable(dockerBin = process.env.DOCKER_BIN, proofDir = proof) {
+  // Fixed absolute locations only. PATH is not consulted, and DOCKER_BIN is accepted only when it is one of these paths.
+  const allowList = ["/usr/bin/docker", "/usr/local/bin/docker", "/opt/homebrew/bin/docker"];
   const blocked = resolve(proofDir, "bin");
-  for (const dir of String(pathValue).split(":")) {
-    if (dir.length === 0 || /[\0\r\n]/.test(dir) || !isAbsolute(dir)) continue;
-    const candidate = join(dir, "docker");
+  const requested = typeof dockerBin === "string" ? dockerBin : "";
+  for (const allowed of allowList) {
+    if (requested !== "" && requested !== allowed) continue;
     let resolved;
     try {
-      accessSync(candidate, constants.X_OK);
-      resolved = realpathSync(candidate);
+      accessSync(allowed, constants.X_OK);
+      resolved = realpathSync(allowed);
       if (!statSync(resolved).isFile() || !isAbsolute(resolved)) continue;
     } catch { continue; }
-    if (resolved === blocked || resolved.startsWith(blocked + sep)) continue;
-    return resolved;
+    if (resolved === blocked || resolved.startsWith(`${blocked}${sep}`)) continue;
+    return allowed;
   }
   return "";
 }
@@ -260,8 +262,10 @@ try {
   receipt.baselineSource = { commit: baselineSource.commit, mode: baselineSource.mode, publicSource: baselineSource.publicSource ?? null };
   mkdirSync(join(proof, "bin"));
   const shimPath = join(proof, "bin", "docker");
-  // The shim must invoke the resolved docker binary. Baking proof/bin/docker back in would exec the shim forever.
-  assert.ok(isAbsolute(executable) && realpathSync(executable) === executable && !executable.startsWith(resolve(proof, "bin") + sep));
+  // The shim must invoke the allow-listed docker binary. Baking proof/bin/docker back in would exec the shim forever.
+  const resolvedExecutable = realpathSync(executable);
+  assert.ok(["/usr/bin/docker", "/usr/local/bin/docker", "/opt/homebrew/bin/docker"].includes(executable)
+    && isAbsolute(resolvedExecutable) && resolvedExecutable !== resolve(proof, "bin") && !resolvedExecutable.startsWith(resolve(proof, "bin") + sep));
   const shim = `#!${process.execPath}\nimport {hostDocker} from ${JSON.stringify(join(root, "scripts/lib/host-rehearsal-resources.mjs"))};\nconst r=hostDocker(${JSON.stringify(ledgerPath)},${JSON.stringify(executable)},process.argv.slice(2));process.exit(r.status??1);\n`;
   writeFileSync(shimPath, shim, { mode: 0o755 });
   copyFileSync(join(root, "scripts/lib/self-host-fixture.mjs"), join(proof, "fixture.mjs"));

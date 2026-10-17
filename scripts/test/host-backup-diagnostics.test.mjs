@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, sep } from "node:path";
 import test from "node:test";
@@ -122,7 +122,7 @@ test("identity capture failures remain fixed, bounded diagnostics without raw ou
   assert.equal(captureHostDockerIdentity(plain).executable.category, "not-executable");
   assert.doesNotMatch(JSON.stringify(failed), /secret-password|private-path|Env|PASSWORD|host-dispatch/);
 });
-test("docker lookup rejects relative PATH entries and will not exec the proof/bin shim", (t) => {
+test("docker lookup accepts only the absolute allow-list and will not exec the proof/bin shim", (t) => {
   const root = mkdtempSync(join(tmpdir(), "host-docker-path-")); t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = readFileSync(new URL("../rehearse-self-host.mjs", import.meta.url), "utf8");
   const fnText = source.slice(source.indexOf("function resolveDockerExecutable("), source.indexOf("\nconst executable = resolveDockerExecutable()"));
@@ -134,35 +134,52 @@ test("docker lookup rejects relative PATH entries and will not exec the proof/bi
   const binary = join(absolute, "docker");
   writeFileSync(binary, "#!/bin/sh\necho absolute\n", { mode: 0o755 });
   const proof = join(root, "proof"); const shimDir = join(proof, "bin"); mkdirSync(shimDir, { recursive: true });
-  writeFileSync(join(shimDir, "docker"), "#!/bin/sh\necho shim\n", { mode: 0o755 });
-  const linkedDir = join(root, "linked-bin"); mkdirSync(linkedDir);
-  const target = join(root, "real-docker"); writeFileSync(target, "#!/bin/sh\necho real\n", { mode: 0o755 });
-  symlinkSync(target, join(linkedDir, "docker"));
-  // cwd is the temp root, so a missing isAbsolute check would execute ./docker and relative-bin/docker.
-  const program = `import { accessSync, constants, realpathSync, statSync } from "node:fs";
-import { isAbsolute, join, resolve, sep } from "node:path";
+  const shim = join(shimDir, "docker");
+  writeFileSync(shim, "#!/bin/sh\necho shim\n", { mode: 0o755 });
+  const realBinary = join(root, "real-docker");
+  writeFileSync(realBinary, "#!/bin/sh\necho real\n", { mode: 0o755 });
+  // cwd contains relative docker binaries. The lookup must ignore them and PATH.
+  const program = `import { accessSync as accessSyncReal, constants, realpathSync as realpathSyncReal, statSync as statSyncReal } from "node:fs";
+import { isAbsolute, resolve, sep } from "node:path";
+const layout = ${JSON.stringify({ relative: join(root, relative, "docker"), dot: join(root, "docker"), binary, shim, realBinary, shimDir })};
+function accessSync(target, mode) {
+  if (["/usr/bin/docker", "/usr/local/bin/docker", "/opt/homebrew/bin/docker"].includes(target)) return;
+  return accessSyncReal(target, mode);
+}
+function realpathSync(target) {
+  if (target === "/usr/bin/docker") return layout.shim;
+  if (target === "/usr/local/bin/docker") return layout.realBinary;
+  if (target === "/opt/homebrew/bin/docker") return target;
+  return realpathSyncReal(target);
+}
+function statSync(target) {
+  if (target === layout.shim || target === layout.realBinary || target === "/opt/homebrew/bin/docker") return { isFile: () => true };
+  return statSyncReal(target);
+}
 ${fnText}
 const proof = ${JSON.stringify(proof)};
 process.stdout.write(JSON.stringify({
   dot: resolveDockerExecutable(".", proof),
   relative: resolveDockerExecutable(${JSON.stringify(relative)}, proof),
-  mixed: resolveDockerExecutable(${JSON.stringify(`${relative}:${absolute}`)}, proof),
-  shim: resolveDockerExecutable(${JSON.stringify(`${shimDir}:${relative}`)}, proof),
-  shimThenAbsolute: resolveDockerExecutable(${JSON.stringify(`${shimDir}:${absolute}`)}, proof),
-  linked: resolveDockerExecutable(${JSON.stringify(linkedDir)}, proof),
+  pathSearch: resolveDockerExecutable(${JSON.stringify(`${relative}:${absolute}`)}, proof),
+  offList: resolveDockerExecutable(${JSON.stringify(binary)}, proof),
+  unset: resolveDockerExecutable(undefined, proof),
+  shimBin: resolveDockerExecutable("/usr/bin/docker", proof),
+  allowed: resolveDockerExecutable("/usr/local/bin/docker", proof),
 }));
 `;
-  const run = spawnSync(process.execPath, ["--input-type=module", "-e", program], { cwd: root, encoding: "utf8", timeout: 10_000 });
+  const run = spawnSync(process.execPath, ["--input-type=module", "-e", program], { cwd: root, encoding: "utf8", timeout: 10_000, env: { ...process.env, PATH: `${join(root, relative)}:${absolute}`, DOCKER_BIN: "" } });
   assert.equal(run.status, 0, run.stderr);
   const cases = JSON.parse(run.stdout);
   assert.equal(cases.dot, "");
   assert.equal(cases.relative, "");
-  assert.equal(cases.mixed, realpathSync(binary));
-  assert.equal(cases.shim, "");
-  assert.equal(cases.shimThenAbsolute, realpathSync(binary));
-  assert.equal(cases.linked, realpathSync(target));
-  assert.equal(isAbsolute(cases.linked), true);
-  assert.equal(cases.linked.startsWith(`${shimDir}${sep}`), false);
+  assert.equal(cases.pathSearch, "");
+  assert.equal(cases.offList, "");
+  assert.equal(cases.shimBin, "");
+  assert.equal(cases.unset, "/usr/local/bin/docker");
+  assert.equal(cases.allowed, "/usr/local/bin/docker");
+  assert.equal(isAbsolute(cases.allowed), true);
+  assert.equal(cases.allowed.startsWith(`${shimDir}${sep}`), false);
 });
 test("rehearsal call captures child stderr and does not leak it to the parent", (t) => {
   const root = mkdtempSync(join(tmpdir(), "host-call-stderr-")); t.after(() => rmSync(root, { recursive: true, force: true }));
