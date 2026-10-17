@@ -2,15 +2,32 @@
 // Fixture credentials, tokens, MFA seeds and package contents stay in /proof.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { createServer } from "node:net";
 
 const require = createRequire(import.meta.url);
 const [mode, configPath] = process.argv.slice(2);
-const data = JSON.parse(readFileSync(configPath, "utf8"));
+const configRealPath = realpathSync(configPath);
+const data = JSON.parse(readFileSync(configRealPath, "utf8"));
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const save = () => writeFileSync(configPath, `${JSON.stringify(data)}\n`, { mode: 0o600 });
+const FIXTURE_CONFIG_LIMIT = 1_048_576;
+const FIXTURE_RESPONSE_LIMIT = 8 * 1024 * 1024;
+const save = () => {
+  const serialized = `${JSON.stringify(data)}\n`;
+  if (serialized.length > FIXTURE_CONFIG_LIMIT || realpathSync(configPath) !== configRealPath) throw new Error("fixture-config-invalid");
+  // Fully anchored printable ASCII. Remote fields are persisted only after this check.
+  if (/^[ -~]+\n$/.test(serialized)) {
+    writeFileSync(configRealPath, serialized, { mode: 0o600 });
+    return;
+  }
+  throw new Error("fixture-config-invalid");
+};
+async function readBounded(response, limit) {
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length > limit) throw new Error("fixture-response-limit");
+  return bytes;
+}
 
 // These helpers execute in Docker's host namespace, which can differ from the
 // native Ubuntu namespace used for Docker Desktop's published loopback ports.
@@ -122,7 +139,9 @@ if (["host-ports", "api-ready", "restore-ready"].includes(mode)) {
       ...(token && !anonymous ? { authorization: `Bearer ${token}` } : {}), ...(body ? { "content-type": "application/json" } : {}),
     }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15_000) });
     assert.equal(response.status, status, `HTTP ${path} expected ${status}; returned ${response.status}`);
-    return response.status === 204 ? null : raw ? Buffer.from(await response.arrayBuffer()) : response.json();
+    if (response.status === 204) return null;
+    const bytes = await readBounded(response, raw ? FIXTURE_RESPONSE_LIMIT : FIXTURE_CONFIG_LIMIT);
+    return raw ? bytes : JSON.parse(bytes.toString("utf8"));
   }
   const source = await api("/version.json");
   assert.deepEqual(source, { version: data.expectedSource.version, revision: data.expectedSource.commit });

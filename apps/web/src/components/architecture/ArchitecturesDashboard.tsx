@@ -117,6 +117,8 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
   // is unsaved work, but it does not make a draft preview stale.
   const [specDirty, setSpecDirty] = useState(false);
   const [messageDirty, setMessageDirty] = useState(false);
+  // Retained only after this architecture's workbench has actually opened.
+  const [heldWorkbenchArchitectureId, setHeldWorkbenchArchitectureId] = useState<string | null>(null);
   const hasUnsavedDraft = specDirty || messageDirty;
   const [mode, setMode] = useState<"detail" | "new">("detail");
   const [opened, setOpened] = useState(false);
@@ -204,6 +206,17 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
   const selectedAvailable = selectedArchitecture !== null;
   const unavailable = loadState === "ready" && routeId !== null && !architectures.some((item) => item.id === routeId);
   const workbench = route.surface === "workbench" && !unavailable;
+  // Layout of a large spec is synchronous. Mount the editor only once the
+  // workbench is shown, then keep that architecture's panel alive so its draft
+  // still survives a later return to the overview.
+  const nextHeldWorkbenchArchitectureId = workbench && selectedArchitectureId
+    ? selectedArchitectureId
+    : heldWorkbenchArchitectureId === selectedArchitectureId
+      ? heldWorkbenchArchitectureId
+      : null;
+  if (nextHeldWorkbenchArchitectureId !== heldWorkbenchArchitectureId) {
+    setHeldWorkbenchArchitectureId(nextHeldWorkbenchArchitectureId);
+  }
   const organizationOnly = architectureIsOrganizationOnly(selectedDetail ?? selectedArchitecture);
   const currentContext = useMemo<ArchitectureContextParams>(() => organizationOnly
     ? (selectedOrganizationId ? { organization: selectedOrganizationId } : {})
@@ -895,7 +908,7 @@ export function ArchitecturesDashboard({ client, session, url, onNavigate, onNav
                       onRetry={requestRefresh}
                     />
                   </div>
-                  {selectedArchitecture && (
+                  {selectedArchitecture && (workbench || heldWorkbenchArchitectureId === selectedArchitecture.id) && (
                     <div className="cp-panel architecture-workbench-panel" hidden={!workbench}>
                       <ArchitectureWorkbenchPanel
                         architecture={selectedArchitecture}

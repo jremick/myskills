@@ -82,8 +82,8 @@ test("maintained rehearsal callers forward only the explicit backup contract and
   docker(["container", "inspect", "a".repeat(64)], options);
   assert.deepEqual(calls, [[f.executable, ["container", "inspect", "a".repeat(64)], options]]);
   const callFunction = source.slice(source.indexOf("function call("), source.indexOf("function reserve("));
-  const boundedCall = new Function("spawnSync", "assertHostCommandSucceeded", "root", `${callFunction}\nreturn call;`)(
-    (command, args, settings) => { assert.equal(settings.maxBuffer, options.maxBuffer); assert.equal(settings.timeout, options.timeout); return { status: 0 }; },
+  const boundedCall = new Function("execFileSync", "assertHostCommandSucceeded", "root", `${callFunction}\nreturn call;`)(
+    (command, args, settings) => { assert.equal(command, f.executable); assert.deepEqual(args, ["network", "inspect", "b".repeat(64)]); assert.equal(settings.maxBuffer, options.maxBuffer); assert.equal(settings.timeout, options.timeout); assert.equal(settings.shell, false); return ""; },
     () => {}, f.root);
   assert.equal(boundedCall(f.executable, ["network", "inspect", "b".repeat(64)], options).status, 0);
 });

@@ -2,9 +2,9 @@
 // Internal fixture only. Called by the canonical railway-images job, with its
 // existing app images. No credentials or raw Docker/provider output are exported.
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { accessSync, constants, copyFileSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { request as httpsRequest } from "node:https";
 import { arch, platform } from "node:os";
@@ -28,7 +28,7 @@ const receipt = { schemaVersion: 1, kind: "myskills-host-rehearsal", status: "fa
   arm64: "unverified", operatorUpgradeFromBaseline: "not-tested-no-baseline-operator-bundle", phases: {}, images: {} };
 let phase = "preconditions";
 let sequence = 0;
-const executable = (spawnSync("sh", ["-c", "command -v docker"], { encoding: "utf8", timeout: 10_000, maxBuffer: 4096 }).stdout ?? "").trim();
+const executable = (process.env.PATH ?? "").split(platform() === "win32" ? ";" : ":").filter((dir) => dir.length > 0 && !/[\0\r\n]/.test(dir)).map((dir) => join(dir, platform() === "win32" ? "docker.exe" : "docker")).find((dockerPath) => { try { accessSync(dockerPath, constants.X_OK); return statSync(dockerPath).isFile(); } catch { return false; } }) ?? "";
 receipt.dockerIdentity = captureHostDockerIdentity(executable);
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const jsonFile = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
@@ -37,9 +37,9 @@ const privateEnv = (path, values) => {
   writeFileSync(path, Object.entries(values).map(([key, value]) => `${key}='${value}'\n`).join(""), { mode: 0o600 });
 };
 function call(command, args, { cwd = root, env = process.env, timeout = 600_000, maxBuffer = 4 * 1024 * 1024, killSignal = "SIGTERM", ok = true } = {}) {
-  const result = spawnSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer, killSignal });
-  if (ok) assertHostCommandSucceeded(command, args, result);
-  return result;
+  if (typeof command !== "string" || command.length === 0 || /[\0\r\n]/.test(command) || !Array.isArray(args) || args.some((arg) => typeof arg !== "string" || arg.includes("\0")) || Object.entries(env ?? {}).some(([key, value]) => typeof key !== "string" || /[\0\r\n]/.test(key) || (typeof value === "string" && value.includes("\0")))) throw new Error("command-invalid");
+  let result; try { result = { status: 0, stdout: execFileSync(command, args, { cwd, env, encoding: "utf8", timeout, maxBuffer, killSignal, shell: false }) ?? "", stderr: "", signal: null }; } catch (error) { const spawned = typeof error.status !== "number"; result = { status: spawned ? null : error.status, stdout: typeof error.stdout === "string" ? error.stdout : "", stderr: typeof error.stderr === "string" ? error.stderr : "", signal: error.signal ?? null, error: spawned ? error : null }; }
+  if (ok) assertHostCommandSucceeded(command, args, result); return result;
 }
 function reserve(kind, name) {
   // The shim appends operator containers while this process waits for it.

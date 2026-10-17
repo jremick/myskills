@@ -30,9 +30,10 @@ export interface ArchitectureEditorSeed {
 }
 
 /**
- * Full-page Workbench for one architecture. The dashboard keeps this panel
- * mounted (hidden) on the overview so one draft session survives both
- * surfaces; it never renders the saved-result overview itself.
+ * Full-page Workbench for one architecture. The dashboard mounts this panel
+ * when the workbench is opened and keeps it mounted (hidden) while that
+ * architecture stays selected, so one draft survives both surfaces. The
+ * overview does not mount it first. It never renders the saved-result overview.
  */
 export function ArchitectureWorkbenchPanel({
   architecture,
