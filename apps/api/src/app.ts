@@ -1,4 +1,5 @@
 import { secretDigest as oauthSecretDigest } from "./oauth/tokens.js";
+import { requestLogDecision, requestLoggingConfigFromEnv, type RequestLoggingConfig } from "./request-logging.js";
 import { hashApiToken, hashSessionToken } from "@myskills-app/auth";
 import { registerArchitectureArtifactRoutes } from "./architecture-sync/artifact-routes.js";
 import type { ArchitectureArtifactService } from "./architecture-sync/artifact-service.js";
@@ -170,6 +171,7 @@ export interface BuildAppOptions {
   readinessProbes?: ReadinessProbes;
   readinessTimeoutMs?: number;
   logger?: boolean;
+  requestLogging?: RequestLoggingConfig;
 }
 
 export function buildApp(options: BuildAppOptions): FastifyInstance {
@@ -190,6 +192,8 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
         },
       },
     } : false,
+    // Per-request lines are emitted by the sampled onResponse hook below.
+    disableRequestLogging: true,
     bodyLimit: DEFAULT_BODY_LIMIT_BYTES,
     ...(options.trustProxy !== undefined ? { trustProxy: options.trustProxy } : {}),
   });
@@ -271,6 +275,18 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
     const delegated = delegatedRequests.get(request);
     const action = requestDelegatedAction(request);
     if (delegated && action) requireConditionalDelegatedPolicy(delegated.context, action, request.body);
+  });
+  const requestLogging = options.requestLogging ?? requestLoggingConfigFromEnv();
+  app.addHook("onResponse", async (request, reply) => {
+    const durationMs = reply.elapsedTime;
+    const path = request.url.split("?", 1)[0] ?? request.url;
+    const decision = requestLogDecision(requestLogging, { statusCode: reply.statusCode, durationMs, path });
+    if (decision !== "skip") {
+      const entry = { req: request, statusCode: reply.statusCode, responseTimeMs: Math.round(durationMs), logReason: decision };
+      if (decision === "error") request.log.error(entry, "request failed");
+      else if (decision === "slow") request.log.warn(entry, "slow request");
+      else request.log.info(entry, "request completed");
+    }
   });
   app.addHook("onResponse", async (request, reply) => {
     const delegated = delegatedRequests.get(request);
