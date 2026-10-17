@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { SIGN_IN_TEXT } from "../../sign-in-flow.js";
 import type { RegistryClient } from "../../api.js";
 
 export function LandingSettings({ client, canEdit, onSaved }: { client: RegistryClient; canEdit: boolean; onSaved: () => void }) {
@@ -64,7 +65,7 @@ export function LandingSettings({ client, canEdit, onSaved }: { client: Registry
           <div><strong id="landing-setting-label">Show landing page</strong><p id="landing-setting-help">Introduce MySkills before people sign in.</p></div>
           <span className="landing-setting-switch-group"><span>{draft ? "On" : "Off"}</span><button ref={switchRef} className="landing-setting-switch" type="button" role="switch" aria-busy={busy} aria-label="Show landing page" aria-describedby="landing-setting-help" aria-checked={draft} disabled={busy} onClick={() => { setDraft(!draft); setMessage(""); }}><span /></button></span>
         </div>
-        <p className="landing-setting-destination"><strong>{draft ? "Home → Landing page" : "Home → Login"}</strong>{draft !== saved && <span>Unsaved</span>}</p>
+        <p className="landing-setting-destination"><strong>{draft ? "Home → Landing page" : SIGN_IN_TEXT.landingHome}</strong>{draft !== saved && <span>Unsaved</span>}</p>
         <p className="admin-guidance">When off, signed-out visitors go straight to login. This applies to the whole instance. Registration, permissions and public skill links stay the same.</p>
         <p className="admin-guidance">Turning this off does not make this instance private. Public skill pages and the API stay reachable.</p>
         <div className="landing-setting-actions">

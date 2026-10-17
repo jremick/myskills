@@ -1937,7 +1937,7 @@
         {
           "path": "apps/api/src/auth/service.ts",
           "line": 146,
-          "sha256": "ea22c9552bc416698c0ffd6a162af59f10929c3c3c013a611514f4d7b8e706e8",
+          "sha256": "dfdd7239d4c1e66a451d061fdf0538046b6df5dd49e6946b6d33b00da50875fc",
           "anchor": "sendPasswordReset(input: AuthActionNotification): Promise<void> | void;"
         },
         {

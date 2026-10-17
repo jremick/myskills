@@ -2,7 +2,8 @@ import { randomBytes } from "node:crypto";
 import { createApiToken, hashApiToken, hashSessionToken } from "@myskills-app/auth";
 import { AppError } from "@myskills-app/core";
 import { apiTokenScopes, type ApiTokenScope } from "../types.js";
-import { DEVICE_LOGIN_TTL_MS, DEVICE_LOGIN_TOKEN_TTL_MS, deviceRequiresMfa, type DeviceLoginStore } from "./types.js";
+import { deviceApproval, type DeviceApproval } from "./approval.js";
+import { DEVICE_LOGIN_TTL_MS, DEVICE_LOGIN_TOKEN_TTL_MS, type DeviceLoginStore } from "./types.js";
 
 export class DeviceLoginService {
   readonly verificationUri: string;
@@ -33,10 +34,26 @@ export class DeviceLoginService {
     }
     return { deviceCode, userCode, verificationUri: this.verificationUri, expiresAt: expiresAt.toISOString(), expiresIn: DEVICE_LOGIN_TTL_MS / 1000, interval: 5 };
   }
-  async inspect(userCode: unknown, roles: string[]) {
+  async inspect(userCode: unknown, actor: { email: string; roles: readonly string[]; mfaVerifiedAt: Date | null; factorCount: number }): Promise<{
+    scopes: readonly string[];
+    expiresAt: string;
+    account: { email: string };
+    approval: DeviceApproval;
+  }> {
     const request = await this.store.find(userCodeHash(userCode));
     if (!request || request.expiresAt <= this.now() || request.status !== "pending") throw invalidCode();
-    return { scopes: request.scopes, expiresAt: request.expiresAt.toISOString(), mfaRequired: deviceRequiresMfa(request.scopes, roles) };
+    return {
+      scopes: request.scopes,
+      expiresAt: request.expiresAt.toISOString(),
+      account: { email: actor.email },
+      approval: deviceApproval({
+        scopes: request.scopes,
+        roles: actor.roles,
+        mfaVerifiedAt: actor.mfaVerifiedAt,
+        factorCount: actor.factorCount,
+        now: this.now(),
+      }),
+    };
   }
   async decide(input: { userCode: unknown; decision: unknown; userId: string; sessionTokenHash: string }) {
     if (input.decision !== "approve" && input.decision !== "deny") throw new AppError("Choose approve or deny.", "INVALID_DEVICE_DECISION", 400);

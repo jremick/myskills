@@ -819,6 +819,24 @@ export class AuthService {
     return null;
   }
 
+  async browserSessionFacts(sessionTokenHash: string): Promise<{
+    userId: string;
+    email: string;
+    roles: readonly string[];
+    mfaVerifiedAt: Date | null;
+    factorCount: number;
+  } | null> {
+    const user = await this.store.findUserBySessionTokenHash(sessionTokenHash);
+    if (!user || !isUsableAuthenticatedAccount(user)) return null;
+    return {
+      userId: user.id,
+      email: user.email,
+      roles: user.roles,
+      mfaVerifiedAt: user.sessionMfaVerifiedAt,
+      factorCount: await this.store.countEnabledMfaFactors(user.id),
+    };
+  }
+
   async authenticateSessionAuthorizationHeader(header: string | undefined): Promise<AuthResponseUser | null> {
     const token = bearerToken(header);
     if (!token) {
