@@ -8,7 +8,8 @@ Install shell scripts under `/mnt/cache/appdata/myskills/bin/`. Install env file
 under `secrets/` as root:600, with `secrets/`, `backups/`, and `import/` root:700.
 Env examples contain names only. Never create `tunnel.env` during Phase 0.
 
-Install `/boot/config/myskills-fw.sh` and verify its rules before creating networks.
+Install `/boot/config/myskills-fw.sh` before starting any workload.
+Create the seven named bridges, then apply and verify the firewall.
 Use `run-<service>.sh create` to create stopped containers.
 `run-<service>.sh run` starts the service and must be used only when authorized.
 Phase 0 starts only this app's Postgres. API, web, migrate and backup remain
@@ -25,7 +26,23 @@ No published ports, docker.sock, privileged mode, or host networking are used.
 R2 and age recipients remain blank. Backup/restore scripts are unscheduled.
 See `BACKUPS.md` for the separate later verification requirements.
 
-DNS-1 remains open: Docker forwards external DNS to the host's LAN resolvers,
-which the approved firewall blocks. Do not add DNS exceptions or start a real
-tunnel until the design decision is approved. GHCR/CI publishing is deferred
-until the account has the required workflow scope.
+DNS-1a permits public DNS only for the six named sources through 1.1.1.1 and
+1.0.0.1. The other containers cannot resolve public names. Both firewall scripts
+and the shared watchdog check all seven explicit bridges. Missing bridges or
+rules stop both tunnels and emit a host log and Unraid alert.
+
+Install `cf-ips.sh` and `watchdog.sh` as `/boot/config/cf-ips.sh` and
+`/boot/config/railway-exit-watchdog.sh`. Append `go-hook.sh` after the existing
+management startup line. The hook validates the live Cloudflare IPv4 list at
+boot and retains the last valid copy if fetching or validation fails. Both
+backups have HTTPS access only to those ranges. A scoped OUTPUT drop prevents
+host-originated new connections to the ForgetBase backup address.
+
+Run 9 is stopped: freshclam's database load test exhausted its 256 MiB memory
+limit. Freshclam is stopped; clamd still awaits signatures. The installed
+seven-bridge firewall remains active. Both database backup roles exist, but
+adoption of the revised backup uploader and host monitor wrapper is pending.
+Keep backups, application containers, migrations and real tunnels stopped.
+The complete watchdog and containment rerun has not passed this run.
+
+GHCR/CI publishing remains deferred until the account has the workflow scope.

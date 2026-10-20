@@ -3,6 +3,7 @@ set -euo pipefail
 source "$(dirname -- "$0")/run-common.sh"
 exec "${COMMAND[@]}" "${COMMON[@]}" \
   --name myskills-backup \
+  --dns 1.1.1.1 --dns 1.0.0.1 \
   --restart no \
   --user 70:70 \
   --memory 128m \
