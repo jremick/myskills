@@ -35,14 +35,17 @@ Install `cf-ips.sh` and `watchdog.sh` as `/boot/config/cf-ips.sh` and
 `/boot/config/railway-exit-watchdog.sh`. Append `go-hook.sh` after the existing
 management startup line. The hook validates the live Cloudflare IPv4 list at
 boot and retains the last valid copy if fetching or validation fails. Both
-backups have HTTPS access only to those ranges. A scoped OUTPUT drop prevents
-host-originated new connections to the ForgetBase backup address.
+backups have HTTPS access only to those ranges. Scoped OUTPUT drops prevent
+host-originated new connections to both backup addresses: 172.30.40.5 on
+br-myskills and 172.30.54.2 on br-fb-bk. Both canonical policies, fail-closed
+startup checks and the shared watchdog require the MySkills backup drop.
 
-Run 10 raised ForgetBase freshclam to 3 GiB (`--memory-swap 3g`) under A7,
-retaining `TestDatabases yes`. Main, daily and bytecode signatures installed and
-freshclam is healthy. Run 11 removed clamd's `LogFile /dev/stdout` setting under
-A8 while retaining `Foreground yes`, scan limits and container hardening.
-Clamd logs to container output and passes PING, EICAR and clean INSTREAM checks.
+Run 12 uses 1.5 GiB for ForgetBase freshclam (`--memory 1536m --memory-swap 1536m`)
+with `TestDatabases yes`. The normal check and a full download into disposable
+tmpfs storage passed with no OOM; the full test peaked at about 697 MiB.
+Clamd retains `Foreground yes` and records EICAR FOUND in Docker logs.
+The direct scan path was used because the EXP API database is not migrated.
+No clamd configuration or hardening change was needed for detection logging.
 The installed seven-bridge firewall remains active. Both database backup roles
 exist. The backup contract is pending design (capacity), not a STOP 0 blocker.
 The monitor is not configured; default push-from-host. Uploader candidates and

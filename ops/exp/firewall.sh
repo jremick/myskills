@@ -44,6 +44,7 @@ rules() {
     echo "ip6tables DOCKER-USER -o $b -j DROP"
   done
   # Host-originated traffic uses OUTPUT, not DOCKER-USER (BK-1 no inbound).
+  echo "iptables OUTPUT -o br-myskills -d 172.30.40.5/32 -m conntrack --ctstate NEW -j DROP"
   echo "iptables OUTPUT -o br-fb-bk -d 172.30.54.2/32 -m conntrack --ctstate NEW -j DROP"
 }
 dns_sources() {

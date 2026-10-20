@@ -9,6 +9,9 @@ while :; do
   for bridge in "${BRIDGES[@]}"; do
     if ! ip link show "$bridge" >/dev/null 2>&1; then failure="missing bridge: $bridge"; break; fi
   done
+  if [[ -z "$failure" ]] && ! iptables -w 5 -C OUTPUT -o br-myskills -d 172.30.40.5/32 -m conntrack --ctstate NEW -j DROP >/dev/null 2>&1; then
+    failure='missing host-to-myskills-backup OUTPUT rule'
+  fi
   if [[ -z "$failure" ]] && ! timeout 35 bash /boot/config/myskills-fw.sh verify >/dev/null 2>&1; then
     failure='firewall verification failed'
   fi
