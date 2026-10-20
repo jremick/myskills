@@ -7,8 +7,8 @@ RUN apk add --no-cache \
       postgresql18-client=18.6-r0 \
       rclone=1.74.1-r3 \
       tar=1.35-r5 \
-  && addgroup -S -g 70 expbackup \
-  && adduser -S -D -H -u 70 -G expbackup expbackup \
+  && test "$(id -u postgres)" = 70 \
+  && test "$(id -g postgres)" = 70 \
   && mkdir -p /opt/exp \
   && pg_dump --version \
   && pg_restore --version \
