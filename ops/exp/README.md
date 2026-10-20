@@ -38,11 +38,15 @@ boot and retains the last valid copy if fetching or validation fails. Both
 backups have HTTPS access only to those ranges. A scoped OUTPUT drop prevents
 host-originated new connections to the ForgetBase backup address.
 
-Run 9 is stopped: freshclam's database load test exhausted its 256 MiB memory
-limit. Freshclam is stopped; clamd still awaits signatures. The installed
-seven-bridge firewall remains active. Both database backup roles exist, but
-adoption of the revised backup uploader and host monitor wrapper is pending.
+Run 10 raised ForgetBase freshclam to 3 GiB (`--memory-swap 3g`) under A7,
+retaining `TestDatabases yes`. Main, daily and bytecode signatures installed and
+freshclam is healthy. Clamd then failed to open its configured `/dev/stdout`
+file logger (`Too many levels of symbolic links`), which stopped the test sequence.
+The installed seven-bridge firewall remains active. Both database backup roles
+exist. The backup contract is pending design (capacity), not a STOP 0 blocker.
+The monitor is not configured; default push-from-host. Uploader candidates and
+the host monitor wrapper remain local and are not adopted during run 10.
 Keep backups, application containers, migrations and real tunnels stopped.
-The complete watchdog and containment rerun has not passed this run.
+The complete STOP 0 watchdog and containment rerun has not passed this run.
 
 GHCR/CI publishing remains deferred until the account has the workflow scope.
