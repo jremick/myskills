@@ -40,13 +40,13 @@ host-originated new connections to the ForgetBase backup address.
 
 Run 10 raised ForgetBase freshclam to 3 GiB (`--memory-swap 3g`) under A7,
 retaining `TestDatabases yes`. Main, daily and bytecode signatures installed and
-freshclam is healthy. Clamd then failed to open its configured `/dev/stdout`
-file logger (`Too many levels of symbolic links`), which stopped the test sequence.
+freshclam is healthy. Run 11 removed clamd's `LogFile /dev/stdout` setting under
+A8 while retaining `Foreground yes`, scan limits and container hardening.
+Clamd logs to container output and passes PING, EICAR and clean INSTREAM checks.
 The installed seven-bridge firewall remains active. Both database backup roles
 exist. The backup contract is pending design (capacity), not a STOP 0 blocker.
 The monitor is not configured; default push-from-host. Uploader candidates and
-the host monitor wrapper remain local and are not adopted during run 10.
+the host monitor wrapper remain local and are not adopted during Phase 0.
 Keep backups, application containers, migrations and real tunnels stopped.
-The complete STOP 0 watchdog and containment rerun has not passed this run.
 
 GHCR/CI publishing remains deferred until the account has the workflow scope.
