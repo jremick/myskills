@@ -1359,8 +1359,8 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 121,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
+          "line": 122,
+          "sha256": "af970d7e81348b1ddd107d2a1c795299d9a2d3d685350bd91ddec84631af1389",
           "anchor": "export const SUBMISSION_BODY_LIMIT_BYTES = 14 * 1024 * 1024;"
         },
         {
@@ -1410,8 +1410,8 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 362,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
+          "line": 378,
+          "sha256": "af970d7e81348b1ddd107d2a1c795299d9a2d3d685350bd91ddec84631af1389",
           "anchor": "app.get(\"/v1/capabilities\", async () => {"
         },
         {
@@ -1500,8 +1500,8 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 121,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
+          "line": 122,
+          "sha256": "af970d7e81348b1ddd107d2a1c795299d9a2d3d685350bd91ddec84631af1389",
           "anchor": "export const SUBMISSION_BODY_LIMIT_BYTES = 14 * 1024 * 1024;"
         },
         {
@@ -1602,8 +1602,8 @@
       "sources": [
         {
           "path": "apps/api/src/app.ts",
-          "line": 941,
-          "sha256": "9fef7e620efccfae9e95122ed36c0165d6546f9bb56f751f136f05f2fba9a2ff",
+          "line": 957,
+          "sha256": "af970d7e81348b1ddd107d2a1c795299d9a2d3d685350bd91ddec84631af1389",
           "anchor": "app.get(\"/v1/skills\", async (request) => {"
         },
         {
@@ -2328,8 +2328,8 @@
       "sources": [
         {
           "path": "scripts/lib/registry-backup.mjs",
-          "line": 260,
-          "sha256": "0c334a081a048e4fe1a0fb1f8d8120fd023dc9f131be3d2c287ccd686d51bd5a",
+          "line": 261,
+          "sha256": "bad4128f048e094c96f144d2a1df278caa4d4360c82d3b54da53771d86067b0c",
           "anchor": "export async function restoreRegistryBackup(env = process.env, runId, dependencies = {}) {"
         },
         {
@@ -2348,8 +2348,8 @@
       "checks": [
         {
           "path": "scripts/test/registry-backup.test.mjs",
-          "line": 316,
-          "sha256": "e19f4912bf05bd5914e3997bb4ea65abebf26cef3f1afc148c912371c54d4c4c",
+          "line": 317,
+          "sha256": "24d4575d00c2855d41a54f64c3eacca1e84b7b389325cfe34f766e696c370655",
           "anchor": "test(\"legacy rehearsal still captures, restores and verifies inline/object data with its existing API\", async (t) => {",
           "command": "node --test scripts/test/registry-backup.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9689,8 +9689,8 @@
       "sources": [
         {
           "path": "scripts/lib/registry-backup.mjs",
-          "line": 260,
-          "sha256": "0c334a081a048e4fe1a0fb1f8d8120fd023dc9f131be3d2c287ccd686d51bd5a",
+          "line": 261,
+          "sha256": "bad4128f048e094c96f144d2a1df278caa4d4360c82d3b54da53771d86067b0c",
           "anchor": "export async function restoreRegistryBackup(env = process.env, runId, dependencies = {}) {"
         },
         {
@@ -9709,8 +9709,8 @@
       "checks": [
         {
           "path": "scripts/test/registry-backup.test.mjs",
-          "line": 160,
-          "sha256": "e19f4912bf05bd5914e3997bb4ea65abebf26cef3f1afc148c912371c54d4c4c",
+          "line": 161,
+          "sha256": "24d4575d00c2855d41a54f64c3eacca1e84b7b389325cfe34f766e696c370655",
           "anchor": "assert(deps.source.queries.every(({ sql }) => /^(SELECT|SET|BEGIN|COMMIT|ROLLBACK)/.test(sql.trim())));",
           "command": "node --test scripts/test/registry-backup.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -9976,7 +9976,7 @@
         {
           "path": "scripts/lib/registry-backup.mjs",
           "line": 50,
-          "sha256": "0c334a081a048e4fe1a0fb1f8d8120fd023dc9f131be3d2c287ccd686d51bd5a",
+          "sha256": "bad4128f048e094c96f144d2a1df278caa4d4360c82d3b54da53771d86067b0c",
           "anchor": "digestFile(manifest.database, config.maximumBytes);"
         },
         {
@@ -9996,7 +9996,7 @@
         {
           "path": "scripts/test/registry-backup.test.mjs",
           "line": 154,
-          "sha256": "e19f4912bf05bd5914e3997bb4ea65abebf26cef3f1afc148c912371c54d4c4c",
+          "sha256": "24d4575d00c2855d41a54f64c3eacca1e84b7b389325cfe34f766e696c370655",
           "anchor": "test(\"one snapshot includes object and inline bytes; source SQL never mutates application data\", async (t) => {",
           "command": "node --test scripts/test/registry-backup.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -13746,8 +13746,8 @@
       "sources": [
         {
           "path": "scripts/lib/registry-backup.mjs",
-          "line": 260,
-          "sha256": "0c334a081a048e4fe1a0fb1f8d8120fd023dc9f131be3d2c287ccd686d51bd5a",
+          "line": 261,
+          "sha256": "bad4128f048e094c96f144d2a1df278caa4d4360c82d3b54da53771d86067b0c",
           "anchor": "export async function restoreRegistryBackup(env = process.env, runId, dependencies = {}) {"
         },
         {
@@ -13766,8 +13766,8 @@
       "checks": [
         {
           "path": "scripts/test/registry-backup.test.mjs",
-          "line": 160,
-          "sha256": "e19f4912bf05bd5914e3997bb4ea65abebf26cef3f1afc148c912371c54d4c4c",
+          "line": 161,
+          "sha256": "24d4575d00c2855d41a54f64c3eacca1e84b7b389325cfe34f766e696c370655",
           "anchor": "assert(deps.source.queries.every(({ sql }) => /^(SELECT|SET|BEGIN|COMMIT|ROLLBACK)/.test(sql.trim())));",
           "command": "node --test scripts/test/registry-backup.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14785,7 +14785,7 @@
         {
           "path": "scripts/lib/registry-backup.mjs",
           "line": 16,
-          "sha256": "0c334a081a048e4fe1a0fb1f8d8120fd023dc9f131be3d2c287ccd686d51bd5a",
+          "sha256": "bad4128f048e094c96f144d2a1df278caa4d4360c82d3b54da53771d86067b0c",
           "anchor": "export function backupConfiguration(env = process.env, mode = \"execute\") {"
         },
         {
@@ -14804,8 +14804,8 @@
       "checks": [
         {
           "path": "scripts/test/registry-backup.test.mjs",
-          "line": 316,
-          "sha256": "e19f4912bf05bd5914e3997bb4ea65abebf26cef3f1afc148c912371c54d4c4c",
+          "line": 317,
+          "sha256": "24d4575d00c2855d41a54f64c3eacca1e84b7b389325cfe34f766e696c370655",
           "anchor": "test(\"legacy rehearsal still captures, restores and verifies inline/object data with its existing API\", async (t) => {",
           "command": "node --test scripts/test/registry-backup.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -14829,8 +14829,8 @@
       "sources": [
         {
           "path": "scripts/lib/registry-backup.mjs",
-          "line": 260,
-          "sha256": "0c334a081a048e4fe1a0fb1f8d8120fd023dc9f131be3d2c287ccd686d51bd5a",
+          "line": 261,
+          "sha256": "bad4128f048e094c96f144d2a1df278caa4d4360c82d3b54da53771d86067b0c",
           "anchor": "export async function restoreRegistryBackup(env = process.env, runId, dependencies = {}) {"
         },
         {
@@ -14849,8 +14849,8 @@
       "checks": [
         {
           "path": "scripts/test/registry-backup.test.mjs",
-          "line": 284,
-          "sha256": "e19f4912bf05bd5914e3997bb4ea65abebf26cef3f1afc148c912371c54d4c4c",
+          "line": 285,
+          "sha256": "24d4575d00c2855d41a54f64c3eacca1e84b7b389325cfe34f766e696c370655",
           "anchor": "test(\"restore downloads the retained set, verifies all bytes, and uses only new loopback destinations\", async (t) => {",
           "command": "node --test scripts/test/registry-backup.test.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -19207,7 +19207,7 @@
         {
           "path": "scripts/lib/registry-backup.mjs",
           "line": 44,
-          "sha256": "0c334a081a048e4fe1a0fb1f8d8120fd023dc9f131be3d2c287ccd686d51bd5a",
+          "sha256": "bad4128f048e094c96f144d2a1df278caa4d4360c82d3b54da53771d86067b0c",
           "anchor": "export function validateManifest(manifest, config) {"
         },
         {
@@ -19226,8 +19226,8 @@
       "checks": [
         {
           "path": "scripts/test/registry-backup.test.mjs",
-          "line": 367,
-          "sha256": "e19f4912bf05bd5914e3997bb4ea65abebf26cef3f1afc148c912371c54d4c4c",
+          "line": 368,
+          "sha256": "24d4575d00c2855d41a54f64c3eacca1e84b7b389325cfe34f766e696c370655",
           "anchor": "test(\"failed restore records destinations before creation and retains them privately through each failure phase\", async (t) => {",
           "command": "node --test scripts/test/registry-backup.test.mjs",
           "execution": "prepared_not_run_on_final_commit"

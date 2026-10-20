@@ -102,7 +102,7 @@ export async function withDeadline(milliseconds, operation, parentSignal) {
 /** Leave this unref timer armed until process exit, including after a cancellation race settles. */
 export function armProcessDeadline(milliseconds) {
   setTimeout(() => {
-    console.error(JSON.stringify({ passed: false, failedPhase: "deadline" }));
+    console.error(JSON.stringify({ level: "error", message: "Registry recovery job FAILED (deadline exceeded)", passed: false, failedPhase: "deadline" }));
     process.exit(1);
   }, milliseconds + 1_000).unref();
 }
