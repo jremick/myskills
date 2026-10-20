@@ -1,7 +1,7 @@
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createHash, randomUUID } from "node:crypto";
 
-export const MAX_ARTIFACT_OBJECT_BYTES = 10 * 1024 * 1024;
+export const MAX_ARTIFACT_OBJECT_BYTES = 40 * 1024 * 1024;
 
 export class ArtifactStorageIntegrityError extends Error {}
 

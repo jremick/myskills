@@ -64,7 +64,7 @@ Native projection bounds versions to 80 characters, platforms to 100, and encode
 resource URIs to 4,096 characters. An incompatible candidate is skipped without
 discarding compatible neighbors or the next-page cursor. An artifact is excluded
 as a whole if any supporting file would have an unreadable URI.
-The five-candidate page has a 5,570,560-byte budget: one 1 MiB manifest plus
+The five-candidate page has a 26,542,080-byte budget: one 5 MiB manifest plus
 64 KiB of metadata allowance per candidate. Session and individual release
 metadata retain a 512 KiB cap. An oversized release is skipped; an oversized
 page fails and its stream is cancelled. Submission limits are unchanged.
@@ -77,9 +77,12 @@ format: metadata maps string keys to string values, compatibility is a 1–500
 character string, and license and allowed-tools are strings. Unknown reserved
 `io.modelcontextprotocol/` metadata is preserved without interpretation; the
 current official conformance tool reports it as an advisory warning. The adapter
-does not grant permissions from allowed-tools. Package limits retain the registry's 500
-text files and 1 MiB total UTF-8 content; native delivery currently supports text
-packages only. BOM and non-ASCII bytes remain unchanged in resources and digests.
+does not grant permissions from allowed-tools. Package limits retain the registry's
+500 files and 5 MiB total UTF-8 text, plus PNG/JPEG/WebP/SVG assets up to 1 MiB each
+and 5 MiB in total. Raster resources return a base64 `blob` and image MIME type;
+SVG resources return validated text. File digests and byte lengths cover decoded
+bytes. The file-reading tool marks raster `content` with `contentEncoding: "base64"`.
+BOM and non-ASCII bytes remain unchanged in text resources and digests.
 
 Resource identities use this structure:
 

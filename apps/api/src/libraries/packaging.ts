@@ -16,7 +16,12 @@ import {
 import {
   DEFAULT_MANIFEST_NAMES,
   MAX_PACKAGE_FILES,
+  MAX_PACKAGE_IMAGE_BYTES,
+  MAX_PACKAGE_IMAGES_BYTES,
   MAX_PACKAGE_TEXT_BYTES,
+  packageFileBytes,
+  packageImageFromBytes,
+  packageImageType,
   parseSkillManifest,
   scanPackageFiles,
   validatePackageFiles,
@@ -35,7 +40,7 @@ import type { SourceTreeEntry } from "./github-source.js";
  * Nothing here performs network I/O; callers supply verified blob bytes.
  */
 
-export const IMPORTER_VERSION = "myskills-library-importer/2";
+export const IMPORTER_VERSION = "myskills-library-importer/3";
 export const IMPORT_MANIFEST_PATH = "myskills-import.json";
 const GENERATED_MANIFEST_PATH = "skill.json";
 const ORIGINAL_SKILL_PATH = LIBRARY_ORIGINAL_SKILL_PATH;
@@ -147,6 +152,7 @@ export function analyzeSkillRoot(entries: readonly SourceTreeEntry[], rootPath: 
   const blockers: LibraryFinding[] = [];
   let fileCount = 0;
   let byteCount = 0;
+  let imageBytes = 0;
   let skillBytes = 0;
   if (!entries.some((entry) => entry.path === `${prefix}SKILL.md` && entry.type === "blob" && entry.mode !== "120000")) {
     blockers.push({ code: "skill-root-missing", severity: "blocking", message: "The selected path has no SKILL.md in this snapshot.", path: rootPath });
@@ -173,6 +179,12 @@ export function analyzeSkillRoot(entries: readonly SourceTreeEntry[], rootPath: 
       blockers.push({ code: "inventory-incomplete", severity: "blocking", message: "The provider did not report this file's size, so the package size cannot be checked before download.", path: entry.path });
     }
     byteCount += entry.size ?? 0;
+    if (packageImageType(relative)) {
+      imageBytes += entry.size ?? 0;
+      if ((entry.size ?? 0) > MAX_PACKAGE_IMAGE_BYTES) {
+        blockers.push({ code: "limit-exceeded", severity: "blocking", message: `Image assets cannot exceed ${MAX_PACKAGE_IMAGE_BYTES} bytes each.`, path: entry.path });
+      }
+    }
     if (relative === "SKILL.md") skillBytes = entry.size ?? 0;
     if (!relative.includes("/") && RESERVED_PACKAGE_PATHS.includes(relative)) {
       blockers.push({ code: "manifest-path-collision", severity: "blocking", message: "The skill already contains a file name reserved for generated MySkills metadata.", path: entry.path });
@@ -188,8 +200,11 @@ export function analyzeSkillRoot(entries: readonly SourceTreeEntry[], rootPath: 
   if (fileCount + ADDED_PACKAGE_FILES + repositoryNotices(entries).length > MAX_PACKAGE_FILES) {
     blockers.push({ code: "limit-exceeded", severity: "blocking", message: `The package would exceed ${MAX_PACKAGE_FILES} files, counting the generated metadata and the preserved original SKILL.md.`, path: rootPath });
   }
-  if (byteCount + skillBytes > MAX_PACKAGE_TEXT_BYTES) {
+  if (byteCount - imageBytes + skillBytes > MAX_PACKAGE_TEXT_BYTES) {
     blockers.push({ code: "limit-exceeded", severity: "blocking", message: `The package text would exceed ${MAX_PACKAGE_TEXT_BYTES} bytes, counting the preserved copy of SKILL.md.`, path: rootPath });
+  }
+  if (imageBytes > MAX_PACKAGE_IMAGES_BYTES) {
+    blockers.push({ code: "limit-exceeded", severity: "blocking", message: `Package images cannot exceed ${MAX_PACKAGE_IMAGES_BYTES} bytes in total.`, path: rootPath });
   }
   return {
     path: rootPath,
@@ -644,16 +659,22 @@ export async function buildCandidatePackage(input: CandidatePackageInput): Promi
   }
 
   const findings: LibraryFinding[] = [...analysis.blockers];
-  const fetched: Array<PackageSourceFile & { bytes: Uint8Array; text: string | null }> = [];
+  const fetched: Array<PackageSourceFile & { bytes: Uint8Array; text: string | null; content: string | null }> = [];
   for (const file of sourceFiles) {
     const bytes = await input.fetchBlob(file);
     const text = decodeText(bytes);
-    if (text === null) {
-      findings.push({ code: "unsupported-binary", severity: "blocking", message: "Binary or non-UTF-8 files are not supported by the text package format.", path: file.sourcePath });
-    } else if (text.startsWith(LFS_POINTER_PREFIX)) {
+    let content = text;
+    if (text?.startsWith(LFS_POINTER_PREFIX)) {
       findings.push({ code: "unsupported-lfs-pointer", severity: "blocking", message: "Git LFS pointers cannot be packaged without their content.", path: file.sourcePath });
+    } else if (packageImageType(file.packagePath)) {
+      try { content = packageImageFromBytes(file.packagePath, Buffer.from(bytes)).content; }
+      catch {
+        findings.push({ code: "unsupported-binary", severity: "blocking", message: "The image asset is invalid, unsafe or oversized.", path: file.sourcePath });
+      }
+    } else if (text === null) {
+      findings.push({ code: "unsupported-binary", severity: "blocking", message: "Only UTF-8 text and validated PNG, JPEG, WebP or SVG images can be packaged.", path: file.sourcePath });
     }
-    fetched.push({ ...file, bytes, text });
+    fetched.push({ ...file, bytes, text, content });
   }
   const upstreamDigests: LibraryCandidateFile[] = fetched.map((file) => ({
     path: file.packagePath,
@@ -770,7 +791,7 @@ export async function buildCandidatePackage(input: CandidatePackageInput): Promi
   const files: HeldFile[] = [
     ...fetched.map((file): HeldFile => (file === skillFile
       ? { path: file.packagePath, content: runtime.content, origin: "generated", sourcePath: file.sourcePath, gitBlobSha: null }
-      : { path: file.packagePath, content: file.text ?? "", origin: file.origin, sourcePath: file.sourcePath, gitBlobSha: file.entry.sha })),
+      : { path: file.packagePath, content: file.content ?? "", origin: file.origin, sourcePath: file.sourcePath, gitBlobSha: file.entry.sha })),
     { path: ORIGINAL_SKILL_PATH, content: skillFile.text, origin: "upstream", sourcePath: skillFile.sourcePath, gitBlobSha: skillFile.entry.sha },
     { path: GENERATED_MANIFEST_PATH, content: `${JSON.stringify(manifest, null, 2)}\n`, origin: "generated", sourcePath: null, gitBlobSha: null },
     { path: IMPORT_MANIFEST_PATH, content: `${JSON.stringify(importManifest, null, 2)}\n`, origin: "generated", sourcePath: null, gitBlobSha: null },
@@ -814,8 +835,8 @@ export async function buildCandidatePackage(input: CandidatePackageInput): Promi
     files: sortedFiles,
     fileDigests: sortedFiles.map((file) => ({
       path: file.path,
-      sha256: sha256Hex(file.content),
-      bytes: Buffer.byteLength(file.content),
+      sha256: sha256Hex(packageFileBytes(file)),
+      bytes: packageFileBytes(file).byteLength,
       origin: file.origin,
       sourcePath: file.sourcePath,
       gitBlobSha: file.gitBlobSha,

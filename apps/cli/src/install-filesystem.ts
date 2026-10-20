@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { constants, type Stats } from "node:fs";
 import { lstat, mkdir, open, readdir, realpath, rename, rm, rmdir, type FileHandle } from "node:fs/promises";
 import path from "node:path";
-import { normalizePackageFilePath, validatePortableFilePaths } from "@myskills-app/skill-package";
+import { normalizePackageFilePath, packageFileBytes, validatePackageFiles } from "@myskills-app/skill-package";
 export { validatePortableFilePaths } from "@myskills-app/skill-package";
 
 interface LockOwner { pid: number; token: string }
@@ -142,6 +142,10 @@ export async function assertRegularDirectory(directory: string): Promise<void> {
 }
 
 export async function readRegularText(filePath: string, maximumBytes = 8 * 1024 * 1024): Promise<string> {
+  return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(await readRegularBytes(filePath, maximumBytes));
+}
+
+async function readRegularBytes(filePath: string, maximumBytes: number): Promise<Buffer> {
   const handle = await openWithoutSymlinks(filePath, constants.O_RDONLY | constants.O_NONBLOCK);
   try {
     const before = await handle.stat();
@@ -157,7 +161,7 @@ export async function readRegularText(filePath: string, maximumBytes = 8 * 1024 
     const named = await lstat(filePath);
     if (count !== before.size || before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs
       || named.isSymbolicLink() || named.ino !== before.ino || named.dev !== before.dev) throw new Error("Local state changed while it was read.");
-    return new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes.subarray(0, count));
+    return bytes.subarray(0, count);
   } finally { await handle.close(); }
 }
 
@@ -180,21 +184,21 @@ export async function atomicPrivateWrite(root: string, filePath: string, content
 }
 
 export async function writeNewPackageTree(root: string, directory: string, files: readonly { path: string; content: string }[]): Promise<void> {
-  validatePortableFilePaths(files);
+  validatePackageFiles(files);
   await ensureSafeDirectory(root, path.dirname(directory));
   await mkdir(directory, { mode: 0o700 });
   for (const file of files) {
     const destination = path.join(directory, normalizePackageFilePath(file.path));
     await ensureSafeDirectory(directory, path.dirname(destination));
     const handle = await openWithoutSymlinks(destination, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
-    try { await handle.writeFile(file.content, "utf8"); await handle.sync(); }
+    try { await handle.writeFile(packageFileBytes(file)); await handle.sync(); }
     finally { await handle.close(); }
   }
   await verifyWrittenTree(directory, files);
 }
 
 async function verifyWrittenTree(directory: string, files: readonly { path: string; content: string }[]): Promise<void> {
-  const expectedFiles = new Map(files.map((file) => [normalizePackageFilePath(file.path), file.content]));
+  const expectedFiles = new Map(files.map((file) => [normalizePackageFilePath(file.path), packageFileBytes(file)]));
   let count = 0;
   async function visit(current: string, relative: string): Promise<void> {
     await assertRegularDirectory(current);
@@ -204,7 +208,7 @@ async function verifyWrittenTree(directory: string, files: readonly { path: stri
       if (entry.isDirectory()) await visit(child, childRelative);
       else if (entry.isFile() && expectedFiles.has(childRelative)) {
         const content = expectedFiles.get(childRelative)!;
-        if ((await lstat(child)).nlink !== 1 || await readRegularText(child, Buffer.byteLength(content)) !== content) throw new Error("Staged export bytes changed before verification.");
+        if ((await lstat(child)).nlink !== 1 || !(await readRegularBytes(child, content.byteLength)).equals(content)) throw new Error("Staged export bytes changed before verification.");
         count += 1;
       } else throw new Error("Staged package contains an unexpected file or symlink.");
     }

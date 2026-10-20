@@ -99,4 +99,4 @@ The [final Collections verification record](BETA18_RELEASE_DELIVERY.md#collectio
 names the candidate, tested merge, landed commit, shared tree, controller runs
 and retained export checksums. Earlier rows retain their original proof limits.
 
-MCP transport ceilings: application API request bodies are limited to 14 MiB, with 64 KiB for the HTTP JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 10 MiB. The matrix records operation coverage separately from these limits and from exhaustive parameter or host acceptance.
+MCP transport ceilings: application API request bodies are limited to 40 MiB, with 64 KiB for the HTTP JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 40 MiB. The matrix records operation coverage separately from these limits and from exhaustive parameter or host acceptance.

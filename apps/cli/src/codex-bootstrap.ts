@@ -8,7 +8,12 @@ import {
   DEFAULT_MANIFEST_NAMES,
   MAX_PACKAGE_ARCHIVE_ENTRIES,
   MAX_PACKAGE_FILES,
+  MAX_PACKAGE_IMAGE_BYTES,
+  MAX_PACKAGE_IMAGES_BYTES,
   MAX_PACKAGE_TEXT_BYTES,
+  packageFileBytes,
+  packageImageFromBytes,
+  packageImageType,
   parseSkillManifest,
   scanPackageFiles,
   SKILL_PACKAGE_MANIFEST_CONTRACT_ID,
@@ -1246,7 +1251,7 @@ async function readBootstrapSnapshot(
   }
   const absoluteRoot = path.resolve(rootPath);
   const absoluteBoundaryRoot = path.resolve(boundaryRoot);
-  const state: SnapshotReadState = { directories: [], files: [], identities: [], entries: 0, totalBytes: 0 };
+  const state: SnapshotReadState = { directories: [], files: [], identities: [], entries: 0, textBytes: 0, imageBytes: 0 };
   await readBootstrapDirectory(absoluteRoot, absoluteBoundaryRoot, "", 0, state, testHooks);
   if (!state.rootPath || !state.rootRealPath || !state.rootStats || state.directories.length === 0 || state.files.length !== state.identities.length) {
     throw new Error("snapshot identity ledger is incomplete");
@@ -1270,7 +1275,8 @@ interface SnapshotReadState {
   files: BootstrapSnapshotFile[];
   identities: BootstrapFileIdentity[];
   entries: number;
-  totalBytes: number;
+  textBytes: number;
+  imageBytes: number;
   rootPath?: string;
   rootRealPath?: string;
   rootStats?: BigIntStats;
@@ -1328,10 +1334,13 @@ async function readBootstrapDirectory(
         await readBootstrapDirectory(entryPath, boundaryRoot, relativePath, depth + 1, state, testHooks);
       } else if (entry.isFile()) {
         if (state.files.length >= MAX_PACKAGE_FILES) throw new Error("snapshot file count exceeded");
-        const readResult = await readBootstrapFile(entryPath, boundaryRoot, relativePath, MAX_PACKAGE_TEXT_BYTES - state.totalBytes, testHooks);
+        const image = packageImageType(relativePath) !== undefined;
+        const remaining = image ? Math.min(MAX_PACKAGE_IMAGE_BYTES, MAX_PACKAGE_IMAGES_BYTES - state.imageBytes) : MAX_PACKAGE_TEXT_BYTES - state.textBytes;
+        const readResult = await readBootstrapFile(entryPath, boundaryRoot, relativePath, remaining, testHooks);
         state.files.push(readResult.file);
         state.identities.push(readResult.identity);
-        state.totalBytes += readResult.file.bytes.byteLength;
+        if (image) state.imageBytes += readResult.file.bytes.byteLength;
+        else state.textBytes += readResult.file.bytes.byteLength;
       } else {
         throw new Error("snapshot special file is not allowed");
       }
@@ -1425,7 +1434,7 @@ async function readHandleBytes(fileHandle: Awaited<ReturnType<typeof open>>, byt
 }
 
 function snapshotFile(relativePath: string, bytes: Buffer): BootstrapSnapshotFile {
-  const content = decodeSnapshotUtf8(bytes);
+  const content = packageImageType(relativePath) ? packageImageFromBytes(relativePath, bytes).content : decodeSnapshotUtf8(bytes);
   return {
     path: relativePath,
     content,
@@ -1525,7 +1534,7 @@ function snapshotArtifactIdentity(snapshot: BootstrapSnapshot): { sha256: string
   const hash = createHash("sha256");
   for (const file of snapshot.files) {
     const pathBytes = Buffer.from(file.path, "utf8");
-    const contentBytes = Buffer.from(file.content, "utf8");
+    const contentBytes = packageFileBytes(file);
     if (file.content.includes("\0") || !contentBytes.equals(file.bytes)) throw new Error("snapshot content bytes changed");
     hash.update(Buffer.from(`${pathBytes.byteLength}:`, "ascii"));
     hash.update(pathBytes);

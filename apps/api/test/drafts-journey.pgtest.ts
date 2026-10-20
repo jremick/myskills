@@ -171,6 +171,14 @@ test("private draft route journey preserves history, isolation and atomic submis
     evidence.push({ check: "history-feedback-concurrency", draftId: created.id, submissionId: submitted.id, correctionId: correction.id, artifactSha256: submitted.artifactSha256 });
   });
 
+  await t.test("five MiB draft text persists under the upgraded database constraint", async () => {
+    const files = [{ path: "SKILL.md", content: "é".repeat(5 * 1024 * 1024 / 2) }];
+    const created = ok(await call("POST", "/v1/drafts", alice, { title: "Five MiB draft", files }), 201).draft;
+    assert.equal((await pool.query("SELECT text_bytes FROM author_draft_revisions WHERE draft_id=$1 AND revision=1", [created.id])).rows[0].text_bytes, 5 * 1024 * 1024);
+    assert.deepEqual(ok(await call("GET", `/v1/drafts/${created.id}`, alice)).draft.files, files);
+    await assert.rejects(pool.query("INSERT INTO author_draft_revisions (draft_id,revision,title,files,file_count,text_bytes,package_digest) VALUES ($1,2,'Overflow','[]',0,5242881,$2)", [created.id, "a".repeat(64)]), /author_draft_revisions_text_bytes_check/);
+  });
+
   await t.test("safe intake and scanner diagnostics", async () => {
     const clean = packageFiles("intake-workflow", "1.0.0");
     const archive = encodePackageArchive(clean);
@@ -178,7 +186,7 @@ test("private draft route journey preserves history, isolation and atomic submis
     for (const files of [
       [{ path: "../escape", content: "x" }], [{ path: "a", content: "x" }, { path: "a/b", content: "y" }],
       [{ path: "NUL", content: "x" }], [{ path: "x", content: "\0" }], [{ path: "x", content: "\ud800" }],
-      [{ path: "x", content: "x".repeat(1024 * 1024 + 1) }], Array.from({ length: 501 }, (_, i) => ({ path: `f${i}`, content: "x" })),
+      [{ path: "x", content: "x".repeat(5 * 1024 * 1024 + 1) }], Array.from({ length: 501 }, (_, i) => ({ path: `f${i}`, content: "x" })),
     ]) denied(await call("POST", "/v1/drafts/preview", alice, { files }), 400, "INVALID_PACKAGE_PAYLOAD");
     denied(await call("POST", "/v1/drafts/preview", alice, { files: clean, archive: { contentBase64: archive.toString("base64") } }), 400, "INVALID_DRAFT_INPUT");
     const symlink = Buffer.from(archive);

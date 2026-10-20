@@ -1,7 +1,8 @@
 import type { SkillPackageBundle, SkillReleaseSummary } from "../../api.js";
+import { isPackageImage } from "../../package-images.js";
 
 const MAX_FILES = 500;
-const MAX_PACKAGE_CHARACTERS = 1_048_576;
+const MAX_PACKAGE_CHARACTERS = 5 * 1024 * 1024;
 const MANIFEST_NAMES = ["skill.json", "skill-manifest.json", "ai-skill.json"];
 export type FileChange = { path: string; kind: "Added" | "Removed" | "Modified" | "Unchanged"; base: string | undefined; target: string | undefined };
 
@@ -13,13 +14,17 @@ export async function verifyBundle(bundle: SkillPackageBundle, release: Pick<Ski
   }
   const paths = new Set<string>();
   let characters = 0;
+  let imageCharacters = 0;
   for (const file of bundle.files) {
     if (!file || typeof file.path !== "string" || !file.path || file.path.length > 1_024 || /[\\\u0000-\u001f]/.test(file.path)
       || file.path.split("/").some(part => !part || part === "." || part === "..") || paths.has(file.path) || typeof file.content !== "string") {
       throw new ComparisonValidationError("This package contains invalid or duplicate file paths.");
     }
     paths.add(file.path);
-    characters += file.content.length;
+    if (isPackageImage(file.path)) {
+      imageCharacters += file.content.length;
+      if (file.content.length > 1_398_104 || imageCharacters > 6_990_520) throw new ComparisonValidationError("This package exceeds the image comparison limit.");
+    } else characters += file.content.length;
     if (characters > MAX_PACKAGE_CHARACTERS) throw new ComparisonValidationError("This package exceeds the text comparison limit.");
   }
   // Hash the received immutable payload BEFORE display sorting. The existing

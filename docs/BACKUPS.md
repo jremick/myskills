@@ -34,7 +34,7 @@ Inject credentials through approved service references or a private operator env
 | `MYSKILLS_RECOVERY_BACKUP_S3_ACCESS_KEY_ID` | Backup storage credential reference |
 | `MYSKILLS_RECOVERY_BACKUP_S3_SECRET_ACCESS_KEY` | Backup storage credential reference |
 | `MYSKILLS_RECOVERY_BACKUP_S3_FORCE_PATH_STYLE` | Independent literal `true` or `false`; configure from bucket metadata |
-| `MYSKILLS_RECOVERY_MAXIMUM_BYTES` | Default `536870912`; applies separately to dump bytes and aggregate artifact bytes; range 14 MiB–2 GiB |
+| `MYSKILLS_RECOVERY_MAXIMUM_BYTES` | Default `536870912`; applies separately to dump bytes and aggregate artifact bytes; range 40 MiB–2 GiB |
 | `MYSKILLS_RECOVERY_TIMEOUT_MS` | Default `600000`; range 1,000–1,800,000 ms |
 | `MYSKILLS_RECOVERY_OUTPUT_PARENT` | Existing private temporary parent outside the checkout; default OS temporary directory |
 | `MYSKILLS_RECOVERY_PG_BIN` | Optional absolute directory containing matching `pg_dump` and `pg_restore` binaries |
@@ -88,7 +88,7 @@ Retention keeps the newest completed recovery point for each of the seven newest
 
 **Malformed sets and partial attempts are never automatically deleted.** Missing markers are skipped, while a marker with a missing/corrupt manifest fails verification and prevents retention. Unexpected namespace objects, foreign prefixes, missing/repeated pagination tokens, or excessive listing size also prevent deletion. An interrupted deletion is retained as a partial set for explicit operator inspection. Inspect the exact namespace and preserve the known good recovery points before separately authorizing cleanup.
 
-The job bounds each artifact to 14 MiB, the artifact count to 10,000, each public table to one million rows, and the table count to 256. Metadata reads are bounded to 8 MiB per manifest and 64 MiB across the candidate collection. Listings allow at most 128 run prefixes and 16 pages; one run deletes at most 16 completed sets. SQL and PostgreSQL child processes have 180-second limits, connections ten seconds, and S3 operations 30 seconds including response bodies. The default whole-job limit is ten minutes. Bounds fail closed; growth beyond them requires an operator decision, not silent truncation.
+The job bounds each artifact to 40 MiB, the artifact count to 10,000, each public table to one million rows, and the table count to 256. Metadata reads are bounded to 8 MiB per manifest and 64 MiB across the candidate collection. Listings allow at most 128 run prefixes and 16 pages; one run deletes at most 16 completed sets. SQL and PostgreSQL child processes have 180-second limits, connections ten seconds, and S3 operations 30 seconds including response bodies. The default whole-job limit is ten minutes. Bounds fail closed; growth beyond them requires an operator decision, not silent truncation.
 
 Scheduled capture removes its local temporary data after success or failure. Uploaded incomplete attempts remain private for inspection. Restore/rehearsal directories and failure reports remain mode `0700`/`0600` outside the checkout. Before creating either restore destination, the script writes the generated names to private `destinations.json`. If creation, restoration, or verification fails, private `failure.json` also retains those names for exact inspection and cleanup. These are reserved destination names, not proof that both resources were created. Confirm existence before cleanup. Public failure status excludes the names and raw provider errors.
 

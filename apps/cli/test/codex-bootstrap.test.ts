@@ -88,6 +88,42 @@ test("a selected source can be planned when its target skill is not yet present"
   assert.equal(report.candidates[0]?.ready, true);
 });
 
+test("bootstrap preserves image bytes in source and target identities and its package snapshot", async (t) => {
+  const fixture = await makeFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1cAAAAASUVORK5CYII=", "base64");
+  const source = path.join(fixture.paths.workSourceRoot, "work-canary", "logo.png");
+  const target = path.join(fixture.paths.liveSkillsRoot, "work-canary", "logo.png");
+  await writeFile(source, png);
+  await writeFile(target, png);
+  const { report } = await createCodexBootstrapDryRun({ paths: fixture.paths, context: fixture.context, candidateAllowlist: ["work-canary"] });
+  assert.equal(report.status, "ready");
+  const candidate = report.candidates[0]!;
+  assert.deepEqual(Buffer.from(candidate.snapshot.find(file => file.path === "logo.png")!.content, "base64"), png);
+  assert.deepEqual(candidate.artifact, persistedArtifactIdentity(candidate.snapshot));
+  assert.equal(candidate.targetObservation.state, "present-identical");
+  assert.deepEqual(await readFile(source), png);
+  assert.deepEqual(await readFile(target), png);
+  const different = Buffer.from(png);
+  different[35] ^= 1;
+  await writeFile(target, different);
+  const changed = await createCodexBootstrapDryRun({ paths: { ...fixture.paths, reportPath: path.join(fixture.reportDir, "different-logo.json") }, context: fixture.context, candidateAllowlist: ["work-canary"] });
+  assert.equal(changed.report.status, "blocked");
+  assert.equal(changed.report.exclusions[0]?.reason, "SOURCE_TARGET_MISMATCH");
+});
+
+test("bootstrap rejects spoofed and oversized image assets before producing a candidate", async (t) => {
+  const fixture = await makeFixture();
+  t.after(() => rm(fixture.root, { recursive: true, force: true }));
+  for (const [name, bytes] of [["spoofed", Buffer.from("not an image")], ["oversized", Buffer.alloc(1024 * 1024 + 1)]] as const) {
+    await writeFile(path.join(fixture.paths.workSourceRoot, "work-canary", "logo.png"), bytes);
+    const { report } = await createCodexBootstrapDryRun({ paths: { ...fixture.paths, reportPath: path.join(fixture.reportDir, `${name}-image.json`) }, context: fixture.context, candidateAllowlist: ["work-canary"] });
+    assert.equal(report.status, "blocked");
+    assert.deepEqual(report.candidates, []);
+    assert.equal(report.exclusions[0]?.reason, "SOURCE_UNAVAILABLE");
+  }
+});
+
 test("target presence is a bound precondition in the plan and execution identity", async (t) => {
   const fixture = await makeFixture();
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
@@ -1135,7 +1171,7 @@ function persistedArtifactIdentity(snapshot: Array<{ path: string; content: stri
   let byteSize = 0;
   for (const file of [...snapshot].sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0)) {
     const pathBytes = Buffer.from(file.path, "utf8");
-    const contentBytes = Buffer.from(file.content, "utf8");
+    const contentBytes = Buffer.from(file.content, /\.(?:png|jpe?g|webp)$/i.test(file.path) ? "base64" : "utf8");
     hash.update(Buffer.from(`${pathBytes.byteLength}:`, "ascii"));
     hash.update(pathBytes);
     hash.update(Buffer.from(`${contentBytes.byteLength}:`, "ascii"));

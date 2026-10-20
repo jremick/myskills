@@ -247,6 +247,7 @@
   background: var(--bw-tile-teal);
 }
 
+.app-shell .bundle-tile img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: inherit; }
 .app-shell .bundle-tile.is-amber { background: var(--bw-tile-amber); }
 .app-shell .bundle-tile.is-navy { background: var(--bw-tile-navy); }
 .app-shell .bundle-tile.is-teal { background: var(--bw-tile-teal); }

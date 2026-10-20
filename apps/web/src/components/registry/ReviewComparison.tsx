@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isRasterPackageImage } from "../../package-images.js";
 import { Button } from "@/components/ui/button";
 import { safeReviewErrorMessage, type RegistryClient, type ReviewSubmissionSummary, type SkillReleaseSummary } from "../../api.js";
 import { compareFiles, verifyBundle } from "./comparison-package.js";
@@ -62,7 +63,7 @@ function ReviewComparisonWorkspace({ client, submission }: { client: RegistryCli
     {visible && <>
       <p className="registry-mono">Base SHA-256: {visible.baseSha256}<br />Candidate SHA-256: {visible.candidateSha256}</p>
       <p>{["Added", "Removed", "Modified", "Unchanged"].map(kind => `${kind} ${visible.changes.filter(file => file.kind === kind).length}`).join(" · ")}</p>
-      {visible.changes.map(file => <details key={file.path}><summary><code>{file.path}</code> · {file.kind}</summary>{file.kind !== "Unchanged" && <>{(["base", "target"] as const).map(side => <div key={side}><strong>{side === "base" ? baseVersion : submission.version}</strong>{file[side] === undefined ? <p>File absent</p> : file[side].includes("\0") ? <p>Binary preview omitted.</p> : <><pre className="package-file-content"><code>{file[side].slice(0, 1024)}</code></pre>{file[side].length > 1024 && <p>Preview truncated. Comparison used complete content.</p>}</>}</div>)}</>}</details>)}
+      {visible.changes.map(file => <details key={file.path}><summary><code>{file.path}</code> · {file.kind}</summary>{file.kind !== "Unchanged" && <>{(["base", "target"] as const).map(side => <div key={side}><strong>{side === "base" ? baseVersion : submission.version}</strong>{file[side] === undefined ? <p>File absent</p> : (isRasterPackageImage(file.path) || file[side].includes("\0")) ? <p>Binary preview omitted.</p> : <><pre className="package-file-content"><code>{file[side].slice(0, 1024)}</code></pre>{file[side].length > 1024 && <p>Preview truncated. Comparison used complete content.</p>}</>}</div>)}</>}</details>)}
     </>}
   </section>;
 }

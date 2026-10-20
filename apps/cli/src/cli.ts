@@ -24,10 +24,9 @@ import path from "node:path";
 import {
   hasBlockingFindings,
   loadStoredSkillManifestFromPackageFiles,
-  loadSkillManifestFromPath,
   normalizePackageFilePath,
   readPackageFilesFromPath,
-  readPackageSnapshot,
+  readPreparedPackageSnapshot,
   PackageArchiveScanError,
   scanPackagePath,
   type PackageScanResult,
@@ -422,8 +421,8 @@ function parityCommandContext(parsed: ParsedArgs, runtime: CliRuntime): ParityCo
       }
     },
     async readInput(inputPath) {
-      const inputLimit = parsed.command === "drafts" ? 14 * 1024 * 1024 : 256_000;
-      const inputLimitLabel = parsed.command === "drafts" ? "14 MiB" : "256 KB";
+      const inputLimit = parsed.command === "drafts" ? 40 * 1024 * 1024 : 256_000;
+      const inputLimitLabel = parsed.command === "drafts" ? "40 MiB" : "256 KB";
       const info = await lstat(inputPath);
       if (!info.isFile() || info.size > inputLimit) throw new CliError(`Input must be a regular JSON file of at most ${inputLimitLabel}.`, 2, "CLI_ARGUMENTS_INVALID");
       let input: unknown;
@@ -453,7 +452,8 @@ function parityCommandContext(parsed: ParsedArgs, runtime: CliRuntime): ParityCo
 }
 
 async function validateCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {
-  const manifest = await loadSkillManifestFromPath(requiredPath(parsed));
+  const { manifest, notices } = await readPreparedPackageSnapshot(requiredPath(parsed));
+  for (const notice of notices) runtime.io.stderr(notice);
   if (parsed.options.json) {
     runtime.io.stdout(JSON.stringify({ manifest }, null, 2));
   } else {
@@ -1839,7 +1839,8 @@ async function submitCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<n
     throw new CliError("No token provided. Run myskills login, set MYSKILLS_TOKEN, or pass --token.", 1);
   }
   const packagePath = requiredPath(parsed);
-  const { manifest, files, scan } = await readPackageSnapshot(packagePath);
+  const { manifest, files, scan, notices } = await readPreparedPackageSnapshot(packagePath);
+  for (const notice of notices) runtime.io.stderr(notice);
   if (hasBlockingFindings(scan.findings)) {
     printScanResult(scan, runtime.io);
     throw new CliError("Package has blocking scan findings; submission was not sent.", 1);

@@ -1,4 +1,4 @@
-export const MAX_PACKAGE_RESPONSE_BYTES = 10 * 1024 * 1024;
+export const MAX_PACKAGE_RESPONSE_BYTES = 40 * 1024 * 1024;
 
 export interface BoundedResponse {
   headers?: Headers | Record<string, string>;

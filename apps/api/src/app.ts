@@ -18,7 +18,8 @@ import { AppError, APPLICATION_SCOPES, createArchitectureDiagramArtifact, parseS
 import {
   MAX_PACKAGE_ARCHIVE_BYTES,
   MAX_PACKAGE_FILES,
-  loadSkillManifestFromPackageFiles,
+  findPackageLogo,
+  preparePackageManifest,
   PackageManifestFileError,
   parseSkillManifest,
   readPackageFilesFromZipBuffer,
@@ -118,7 +119,7 @@ const SESSION_COOKIE_NAME = "myskills_session";
 const COOKIE_SESSION_RESPONSE_HEADER = "x-myskills-session-response";
 const REVIEW_ARTIFACT_HASH_HEADER = "x-myskills-artifact-sha256";
 const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
-export const SUBMISSION_BODY_LIMIT_BYTES = 14 * 1024 * 1024;
+export const SUBMISSION_BODY_LIMIT_BYTES = 40 * 1024 * 1024;
 const MCP_SESSION_REQUIRED_SCOPES: readonly ApiTokenScope[] = APPLICATION_SCOPES;
 type TrustProxyOption = NonNullable<FastifyServerOptions["trustProxy"]>;
 
@@ -1009,6 +1010,24 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       .header("content-length", String(Buffer.byteLength(bundle.body)))
       .type(bundle.artifact.contentType)
       .send(bundle.body);
+  });
+
+  app.get("/v1/skills/:slug/releases/:version/logo", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!options.submissionService) throw new AppError("Submission service is not configured.", "SUBMISSION_SERVICE_UNAVAILABLE", 503);
+    const bundle = await readAuthorizedArtifactBundle({
+      authService: options.authService,
+      submissionService: options.submissionService,
+      authorization: requestAuthorization(request),
+      ...parseReleaseParams(request.params),
+    });
+    if (!bundle) return reply.code(404).send({ error: { code: "LOGO_NOT_FOUND", message: "Skill logo not found." } });
+    const logo = findPackageLogo((JSON.parse(bundle.body) as { files: PackageInputFile[] }).files);
+    if (!logo) return reply.code(404).send({ error: { code: "LOGO_NOT_FOUND", message: "Skill logo not found." } });
+    return reply.header("x-content-type-options", "nosniff")
+      .header("content-security-policy", "default-src 'none'; sandbox")
+      .header("content-length", String(logo.bytes.byteLength))
+      .type(logo.contentType).send(logo.bytes);
   });
 
   app.get("/v1/skills/:slug", async (request, reply) => {
@@ -2400,7 +2419,7 @@ export function buildApp(options: BuildAppOptions): FastifyInstance {
       files: input.files,
       release: input.release,
     });
-    return reply.code(202).send(submissionResponse(submission));
+    return reply.code(202).send({ ...submissionResponse(submission), ...(input.notices.length ? { notices: input.notices } : {}) });
   });
 
   app.get("/v1/review/submissions", async (request, reply) => {
@@ -4183,6 +4202,7 @@ async function parseSubmissionInput(input: unknown): Promise<{
   manifest: ReturnType<typeof parseSkillManifest>;
   files: PackageInputFile[];
   release: SkillReleaseMetadata;
+  notices: string[];
 }> {
   const body = parseJsonObject(input);
   rejectServerManagedSubmissionFields(body);
@@ -4207,11 +4227,8 @@ async function parseSubmissionInput(input: unknown): Promise<{
     } catch (error) {
       throw new AppError(error instanceof Error ? error.message : "Invalid package archive.", "INVALID_PACKAGE_ARCHIVE", 400);
     }
-    return {
-      manifest: parseSubmissionManifest(body.manifest, files, { optional: true }),
-      files,
-      release,
-    };
+    const prepared = prepareSubmissionFiles(files);
+    return { ...prepared, manifest: parseSubmissionManifest(body.manifest, prepared.manifest), release };
   }
 
   if (!Array.isArray(body.files)) {
@@ -4235,17 +4252,12 @@ async function parseSubmissionInput(input: unknown): Promise<{
     };
   });
 
-  return {
-    manifest: parseSubmissionManifest(body.manifest, files, { optional: false }),
-    files,
-    release,
-  };
+  const prepared = prepareSubmissionFiles(files);
+  return { ...prepared, manifest: parseSubmissionManifest(body.manifest, prepared.manifest), release };
 }
 
-function parseSubmissionManifest(input: unknown, files: PackageInputFile[], options: { optional: boolean }): ReturnType<typeof parseSkillManifest> {
-  if (input === undefined && options.optional) {
-    return manifestFromPackageFiles(files);
-  }
+function parseSubmissionManifest(input: unknown, packageManifest: ReturnType<typeof parseSkillManifest>): ReturnType<typeof parseSkillManifest> {
+  if (input === undefined) return packageManifest;
   try {
     return parseSkillManifest(input);
   } catch {
@@ -4253,14 +4265,14 @@ function parseSubmissionManifest(input: unknown, files: PackageInputFile[], opti
   }
 }
 
-function manifestFromPackageFiles(files: PackageInputFile[]): ReturnType<typeof parseSkillManifest> {
+function prepareSubmissionFiles(files: PackageInputFile[]): ReturnType<typeof preparePackageManifest> {
   try {
-    return loadSkillManifestFromPackageFiles(files);
+    return preparePackageManifest(files);
   } catch (error) {
     if (error instanceof PackageManifestFileError) {
       throw new AppError(error.message, error.code, 400);
     }
-    throw new AppError(error instanceof Error ? error.message : "Invalid package archive.", "INVALID_PACKAGE_ARCHIVE", 400);
+    throw new AppError(error instanceof Error ? error.message : "Invalid package payload.", "INVALID_PACKAGE_PAYLOAD", 400);
   }
 }
 

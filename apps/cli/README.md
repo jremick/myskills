@@ -208,14 +208,25 @@ The output must end in `.zip` and have an existing parent directory outside
 the source tree. Existing files, directories, symlinks, and symlink ancestors
 are refused. All regular source files are included; there is no ignore file.
 Keep credentials and unrelated files outside the source directory. The package
-limits are 500 files, 1 MiB of text, 1,000 filesystem entries, and a 10 MiB
-archive. Binary files,
-symlinks, and special files are rejected. Text bytes, including BOMs and line
+limits are 500 files, 5 MiB of text, 1,000 filesystem entries, and a 10 MiB
+archive. PNG, JPEG, WebP and inert SVG assets are supported up to 1 MiB each
+and 5 MiB in total. Other binary files, symlinks, and special files are rejected.
+Text bytes, including BOMs and line
 endings, are preserved. Entries use ordinal UTF-8 path order, fixed timestamps
 and permissions, and uncompressed ZIP storage, so source mtimes and locale do
 not change the archive checksum. Empty directories and executable bits are not
 preserved. The archive checksum identifies the ZIP bytes, not the registry's
 package-content digest.
+
+Place the skill logo at `logo.png`, `logo.jpg`, `logo.jpeg`, `logo.webp`, or
+`logo.svg`, or under `assets/` with the same filename. Root logos take precedence.
+The website displays the published release's logo, with its existing tile as a
+fallback. Logos use the release's access rules; private logos are not public.
+JSON package payloads encode raster `content` as canonical base64; SVG and other
+text remain UTF-8. Export/install restore original image bytes. Image signatures
+must match their extensions. SVG supports inert vector elements and local paint
+references only; scripts, event handlers, CSS, external references and embedded
+HTML are rejected. No logo database migration or new storage service is required.
 
 Local authoring requires macOS or Linux. The archive is created with private
 file permissions and exclusive creation; it never overwrites a destination
@@ -325,7 +336,9 @@ Use the resulting tarball for a fresh isolated installation, or run the bundle
 directly. The release gate verifies the packed executable and Apache license.
 Public npm publication is a separate release step.
 
-`validate`, `scan`, and `submit` accept a manifest file, package directory, or local `.zip` package. `login` prompts for the API URL when one is not supplied; the default is the local API at `http://localhost:3001`, and custom hosted URLs can be entered manually. Successful login stores the selected API URL in local CLI config so later commands can omit `--api-url`. API URL resolution is `--api-url`, then `MYSKILLS_API_URL`, then saved config, then `http://localhost:3001`.
+`validate`, `scan`, and `submit` accept a manifest file, package directory, or local `.zip` package. When no supported root manifest exists, `validate` and `submit` generate `skill.json` in the package snapshot from the root `SKILL.md` YAML frontmatter and print a notice to stderr. The source directory or ZIP stays unchanged. `name` and `description` are required. Generated metadata uses private visibility, version `0.1.0` (unless `version` or `metadata.version` is supplied), `UNLICENSED`, and the `codex-skill` platform target by default. Optional `title`, `license`, `platforms`, and `tags` are preserved; the summary uses the first 500 characters of the description. Invalid existing manifests still fail validation. API submission intake applies the same generation to files and ZIP uploads, stores the generated file with the artifact, and returns a `notices` array when generation occurs.
+
+`login` prompts for the API URL when one is not supplied; the default is the local API at `http://localhost:3001`, and custom hosted URLs can be entered manually. Successful login stores the selected API URL in local CLI config so later commands can omit `--api-url`. API URL resolution is `--api-url`, then `MYSKILLS_API_URL`, then saved config, then `http://localhost:3001`.
 
 `login` supports email/password, API-key and browser/device flows. Password
 login handles MFA challenges and stores the verified session token. API-key

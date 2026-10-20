@@ -117,7 +117,7 @@ Stop after a target failure. A later rollout controller can resume only from an 
 
 ## 6. Resource limits, retention and operation
 
-Preserve current per-package limits: 500 files, 1 MiB UTF-8 text and 10 MiB input archive, including generated manifest and notices. These are read from the baseline package code, not proposed increases.
+Current per-package limits are 500 files, 5 MiB UTF-8 text and 10 MiB input archive, including generated manifest and notices. The text budget was raised from the original 1 MiB baseline on 2026-10-15.
 
 Proposed pilot defaults to validate before release: 100 active tracks per owner scope, 500 entries per library, 10,000 inventory paths per check, 60-second remote-check deadline, at most five attempts with provider-required delays, and one provider request at a time per credential. An operator can lower ceilings. Do not silently truncate; expose `limit-exceeded` with a narrower selection action. Larger repositories can remain reference-only. These limits bound abuse and are not promised scale benchmarks.
 

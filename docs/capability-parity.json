@@ -23,7 +23,7 @@
           "method": "GET",
           "path": "/v1/skills",
           "source": "apps/api/src/app.ts",
-          "line": 941
+          "line": 942
         }
       ],
       "api": {
@@ -64,7 +64,7 @@
         "detail": "Registry filters and pagination",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 677,
+          "line": 678,
           "anchor": "const request = registryClient.searchSkillPage"
         },
         "evidence": [
@@ -127,7 +127,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 1014
+          "line": 1033
         }
       ],
       "api": {
@@ -160,7 +160,7 @@
         "detail": "Skill inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5742,
+          "line": 5744,
           "anchor": "function SkillDetail({"
         },
         "evidence": [
@@ -223,7 +223,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases",
           "source": "apps/api/src/app.ts",
-          "line": 950
+          "line": 951
         }
       ],
       "api": {
@@ -319,7 +319,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases/:version",
           "source": "apps/api/src/app.ts",
-          "line": 963
+          "line": 964
         }
       ],
       "api": {
@@ -360,7 +360,7 @@
         "detail": "Exact version inspector",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5742,
+          "line": 5744,
           "anchor": "function SkillDetail({"
         },
         "evidence": [
@@ -423,7 +423,7 @@
           "method": "GET",
           "path": "/v1/skills/:slug/releases/:version/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 984
+          "line": 985
         }
       ],
       "api": {
@@ -449,6 +449,14 @@
               "path": "apps/api/test/postgres-artifact-delivery.pgtest.ts",
               "line": 16
             }
+          },
+          {
+            "level": "contract",
+            "detail": "PNG/JPEG/WebP use canonical base64 in existing JSON artifacts; SVG stays UTF-8 and is restricted to inert shapes. Signature, SVG, directory and ZIP checks pass with 1 MiB per image and 5 MiB total image limits. Library import preserves decoded image bytes and digests.",
+            "source": {
+              "path": "packages/skill-package/test/assets.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -457,7 +465,7 @@
         "detail": "export/install bind the exact release digest, bound streamed bytes by validated size, hash raw bytes, strictly decode UTF-8 and reject redirects.",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 1987,
+          "line": 1988,
           "anchor": "async function exportCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -472,15 +480,23 @@
               "path": "apps/cli/test/trust-response.e2e.test.ts",
               "line": 1
             }
+          },
+          {
+            "level": "runtime",
+            "detail": "PNG package export over real local HTTP preserves exact bytes through the existing installer. Codex bootstrap image snapshot and materialization tests pass.",
+            "source": {
+              "path": "apps/cli/test/asset-export.test.ts",
+              "line": 1
+            }
           }
         ]
       },
       "ui": {
         "status": "B",
-        "detail": "View Skill previews the selected exact release’s root SKILL.md on demand; package files remain inspectable as text. Export/install completion remains a CLI/runtime handoff.",
+        "detail": "View Skill previews the selected exact release root SKILL.md; text files remain inspectable and binary assets have safe download guidance. Export/install completion remains a CLI/runtime handoff.",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 920,
+          "line": 921,
           "anchor": "selectedSkill && release && supportedDetailPlatform ? exportCommand(selectedSkill.slug, release.version, supportedDetailPlatform) : \"\""
         },
         "evidence": [
@@ -521,6 +537,14 @@
               "path": "apps/mcp/test/trust-delivery.e2e.test.ts",
               "line": 92
             }
+          },
+          {
+            "level": "contract",
+            "detail": "Native Skills image read/resource contract tests pass: decoded byte counts/digests and image MIME types; raster resource uses blob base64, readFile marks contentEncoding base64. Real human host rendering is unverified.",
+            "source": {
+              "path": "apps/mcp/test/skills.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -537,6 +561,14 @@
             "detail": "Fixed named action registration and explicit input contracts are present. This is core operation coverage, not exhaustive field, domain or host acceptance proof.",
             "source": {
               "path": "apps/mcp/src/application-tools.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Native Skills image read/resource contract tests pass: decoded byte counts/digests and image MIME types; raster resource uses blob base64, readFile marks contentEncoding base64. Real human host rendering is unverified.",
+            "source": {
+              "path": "apps/mcp/test/skills.test.ts",
               "line": 1
             }
           }
@@ -559,13 +591,13 @@
           "method": "GET",
           "path": "/v1/manage/skills",
           "source": "apps/api/src/app.ts",
-          "line": 2236
+          "line": 2255
         },
         {
           "method": "GET",
           "path": "/v1/manage/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 2251
+          "line": 2270
         }
       ],
       "api": {
@@ -669,7 +701,7 @@
           "method": "PUT",
           "path": "/v1/skills/:slug",
           "source": "apps/api/src/app.ts",
-          "line": 1029
+          "line": 1048
         }
       ],
       "api": {
@@ -773,7 +805,7 @@
           "method": "POST",
           "path": "/v1/skills/:slug/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1086
+          "line": 1105
         }
       ],
       "api": {
@@ -869,7 +901,7 @@
           "method": "POST",
           "path": "/v1/skills/:slug/releases/:version/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1111
+          "line": 1130
         }
       ],
       "api": {
@@ -956,6 +988,92 @@
       "initial_authorization": "Release owner/manager or reviewer as the service permits; review:write for token mutations; MFA for privileged roles. Action-specific state, reason and replacement rules."
     },
     {
+      "id": "REG-12",
+      "domain": "Registry",
+      "capability": "Read and display an exact release logo",
+      "category": "product",
+      "api_operations": [
+        {
+          "method": "GET",
+          "path": "/v1/skills/:slug/releases/:version/logo",
+          "source": "apps/api/src/app.ts",
+          "line": 1015
+        }
+      ],
+      "api": {
+        "status": "A",
+        "detail": "Conventional root logo.* or assets/logo.* is read from the existing artifact after the same pre/post-storage authorization as bundle export. API tests pass public image bytes, absent/private/archived denial and safe response headers.",
+        "evidence": [
+          {
+            "level": "contract",
+            "detail": "Conventional root logo.* or assets/logo.* is read from the existing artifact after the same pre/post-storage authorization as bundle export. API tests pass public image bytes, absent/private/archived denial and safe response headers.",
+            "source": {
+              "path": "apps/api/test/skill-logo.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "cli": {
+        "status": "A",
+        "detail": "Export/install delivers the same conventional logo bytes with the package; no graphical CLI rendering. Local HTTP export test passes exact bytes.",
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Export/install delivers the same conventional logo bytes with the package; no graphical CLI rendering. Local HTTP export test passes exact bytes.",
+            "source": {
+              "path": "apps/cli/test/asset-export.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "ui": {
+        "status": "A",
+        "detail": "Registry catalog and detail placeholders load the authorized exact-release logo and retain fallback on absence or failure. Comet browser test passes PNG/SVG decoding and missing-logo fallback using local API memory stores and catalog fixture rows; no deployed proof.",
+        "evidence": [
+          {
+            "level": "runtime",
+            "detail": "Registry catalog and detail placeholders load the authorized exact-release logo and retain fallback on absence or failure. Comet browser test passes PNG/SVG decoding and missing-logo fallback using local API memory stores and catalog fixture rows; no deployed proof.",
+            "source": {
+              "path": "apps/web/test/e2e/skill-logo.spec.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_api_token": {
+        "status": "A",
+        "detail": "Native Skills reads conventional logo files as image resources; blob/MIME/digest contract tests pass. Host rendering remains unverified.",
+        "evidence": [
+          {
+            "level": "contract",
+            "detail": "Native Skills reads conventional logo files as image resources; blob/MIME/digest contract tests pass. Host rendering remains unverified.",
+            "source": {
+              "path": "apps/mcp/test/skills.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "mcp_oauth": {
+        "status": "A",
+        "detail": "Same native Skills image resource path and authorization; contract tests pass. OAuth host rendering remains unverified.",
+        "evidence": [
+          {
+            "level": "contract",
+            "detail": "Same native Skills image resource path and authorization; contract tests pass. OAuth host rendering remains unverified.",
+            "source": {
+              "path": "apps/mcp/test/skills.test.ts",
+              "line": 1
+            }
+          }
+        ]
+      },
+      "authorization": "Uses existing exact-release bundle authorization, including visibility, lifecycle, account and skills:read credential checks before and after storage. Response is no-store with nosniff and a sandbox CSP.",
+      "gap": "G02"
+    },
+    {
       "id": "REG-10",
       "domain": "Registry",
       "capability": "Read and replace sharing grants",
@@ -965,13 +1083,13 @@
           "method": "GET",
           "path": "/v1/skills/:slug/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1137
+          "line": 1156
         },
         {
           "method": "PUT",
           "path": "/v1/skills/:slug/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1154
+          "line": 1173
         }
       ],
       "api": {
@@ -1004,7 +1122,7 @@
         "detail": "Sharing editor",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 6098,
+          "line": 6100,
           "anchor": "const next = await client.updateSkillSharing({"
         },
         "evidence": [
@@ -1110,7 +1228,7 @@
         "detail": "bundles list/show/members/memberships",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2003,
+          "line": 2004,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1209,7 +1327,7 @@
         "detail": "bundles sources",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2003,
+          "line": 2004,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1311,7 +1429,7 @@
         "detail": "bundles create/edit",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2003,
+          "line": 2004,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1415,7 +1533,7 @@
         "detail": "bundles save",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2003,
+          "line": 2004,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -1492,7 +1610,7 @@
           "method": "POST",
           "path": "/v1/submissions",
           "source": "apps/api/src/app.ts",
-          "line": 2380
+          "line": 2399
         }
       ],
       "api": {
@@ -1510,6 +1628,22 @@
               "path": "apps/api/src/package-quality/scan-worker.ts",
               "line": 1
             }
+          },
+          {
+            "level": "contract",
+            "detail": "Missing skill.json is generated from strict root SKILL.md YAML with private visibility; archive and normalized-file submission tests pass, including invalid frontmatter. Existing manifests remain authoritative. No deployed proof.",
+            "source": {
+              "path": "apps/api/test/submission-routes.test.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Text budget is 5 MiB, with separate image limits. API request/artifact and CLI/MCP transfer envelopes are 40 MiB for worst-case JSON escaping plus base64. Size boundary and escaped-envelope tests pass; deploy requires migration 0043 and the updated proxy config.",
+            "source": {
+              "path": "apps/api/test/package-size.e2e.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -1525,6 +1659,14 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: submit --path. Runtime parity is not implied."
+          },
+          {
+            "level": "contract",
+            "detail": "CLI validate/submit generate a private manifest in the held package snapshot, emit a notice and leave source files unchanged. Missing/malformed metadata and submitted-manifest assertions pass.",
+            "source": {
+              "path": "apps/cli/test/cli.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -1533,7 +1675,7 @@
         "detail": "Submit archive",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2253,
+          "line": 2255,
           "anchor": "const submitted = await client.submitArchive({"
         },
         "evidence": [
@@ -1596,7 +1738,7 @@
           "method": "GET",
           "path": "/v1/submissions/mine",
           "source": "apps/api/src/app.ts",
-          "line": 2304
+          "line": 2323
         }
       ],
       "api": {
@@ -1629,7 +1771,7 @@
         "detail": "My submissions",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2209,
+          "line": 2211,
           "anchor": "setSubmissions(await client.listUserSubmissions());"
         },
         "evidence": [
@@ -1692,7 +1834,7 @@
           "method": "GET",
           "path": "/v1/submissions/:id",
           "source": "apps/api/src/app.ts",
-          "line": 2268
+          "line": 2287
         }
       ],
       "api": {
@@ -1811,7 +1953,7 @@
           "method": "GET",
           "path": "/v1/submissions/:id/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 2323
+          "line": 2342
         }
       ],
       "api": {
@@ -1851,7 +1993,7 @@
         "detail": "Export own submission",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2271,
+          "line": 2273,
           "anchor": "const bundle = await client.exportUserSubmission(submission.id);"
         },
         "evidence": [
@@ -1914,7 +2056,7 @@
           "method": "POST",
           "path": "/v1/submissions/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 2355
+          "line": 2374
         }
       ],
       "api": {
@@ -1947,7 +2089,7 @@
         "detail": "Withdraw control",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2297,
+          "line": 2299,
           "anchor": "await client.performSubmissionAction(submission.id, \"withdraw\", confirmedReason);"
         },
         "evidence": [
@@ -2010,7 +2152,7 @@
           "method": "GET",
           "path": "/v1/review/submissions",
           "source": "apps/api/src/app.ts",
-          "line": 2406
+          "line": 2425
         }
       ],
       "api": {
@@ -2051,7 +2193,7 @@
         "detail": "Review queue and load more",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2596,
+          "line": 2598,
           "anchor": "return client.listReviewSubmissionPage ? client.listReviewSubmissionPage({ limit: 100, cursor })"
         },
         "evidence": [
@@ -2114,7 +2256,7 @@
           "method": "GET",
           "path": "/v1/review/submissions/:id",
           "source": "apps/api/src/app.ts",
-          "line": 2285
+          "line": 2304
         }
       ],
       "api": {
@@ -2225,7 +2367,7 @@
           "method": "GET",
           "path": "/v1/review/submissions/:id/bundle",
           "source": "apps/api/src/app.ts",
-          "line": 2425
+          "line": 2444
         }
       ],
       "api": {
@@ -2362,7 +2504,7 @@
           "method": "POST",
           "path": "/v1/review/submissions/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 2460
+          "line": 2479
         }
       ],
       "api": {
@@ -2395,7 +2537,7 @@
         "detail": "Review actions",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2663,
+          "line": 2665,
           "anchor": "const result = await client.performReviewAction({"
         },
         "evidence": [
@@ -5521,7 +5663,7 @@
           "method": "GET",
           "path": "/v1/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1967
+          "line": 1986
         }
       ],
       "api": {
@@ -5554,7 +5696,7 @@
         "detail": "Teams dashboard",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3183,
+          "line": 3185,
           "anchor": "client.listTeams(),"
         },
         "evidence": [
@@ -5625,7 +5767,7 @@
           "method": "POST",
           "path": "/v1/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1981
+          "line": 2000
         }
       ],
       "api": {
@@ -5658,7 +5800,7 @@
         "detail": "Create team",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3275,
+          "line": 3277,
           "anchor": "await client.createTeam(teamName);"
         },
         "evidence": [
@@ -5729,13 +5871,13 @@
           "method": "POST",
           "path": "/v1/teams/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 2024
+          "line": 2043
         },
         {
           "method": "POST",
           "path": "/v1/teams/invitations/:id/accept",
           "source": "apps/api/src/app.ts",
-          "line": 2110
+          "line": 2129
         }
       ],
       "api": {
@@ -5768,7 +5910,7 @@
         "detail": "Team invitations",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3294,
+          "line": 3296,
           "anchor": "await client.inviteTeamMember(invitedTeam.id, email);"
         },
         "evidence": [
@@ -5840,7 +5982,7 @@
           "method": "DELETE",
           "path": "/v1/teams/:teamId/invitations/:invitationId",
           "source": "apps/api/src/app.ts",
-          "line": 2046
+          "line": 2065
         }
       ],
       "api": {
@@ -5938,13 +6080,13 @@
           "method": "PUT",
           "path": "/v1/teams/:teamId/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 2068
+          "line": 2087
         },
         {
           "method": "DELETE",
           "path": "/v1/teams/:teamId/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 2089
+          "line": 2108
         }
       ],
       "api": {
@@ -6043,7 +6185,7 @@
           "method": "GET",
           "path": "/v1/teams/shared-skills",
           "source": "apps/api/src/app.ts",
-          "line": 2130
+          "line": 2149
         }
       ],
       "api": {
@@ -6076,7 +6218,7 @@
         "detail": "Team shared skills",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 3184,
+          "line": 3186,
           "anchor": "client.listTeamSharedSkills(),"
         },
         "evidence": [
@@ -6139,13 +6281,13 @@
           "method": "GET",
           "path": "/v1/organizations",
           "source": "apps/api/src/app.ts",
-          "line": 1648
+          "line": 1667
         },
         {
           "method": "GET",
           "path": "/v1/organizations/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1714
+          "line": 1733
         }
       ],
       "api": {
@@ -6185,7 +6327,7 @@
         "detail": "Organizations dashboard",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 372,
+          "line": 373,
           "anchor": "const canUseOrganizations = Boolean(session && registryClient.listOrganizations);"
         },
         "evidence": [
@@ -6249,13 +6391,13 @@
           "method": "POST",
           "path": "/v1/organizations",
           "source": "apps/api/src/app.ts",
-          "line": 1662
+          "line": 1681
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1905
+          "line": 1924
         }
       ],
       "api": {
@@ -6359,19 +6501,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/members",
           "source": "apps/api/src/app.ts",
-          "line": 1731
+          "line": 1750
         },
         {
           "method": "GET",
           "path": "/v1/organizations/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1748
+          "line": 1767
         },
         {
           "method": "GET",
           "path": "/v1/organizations/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1682
+          "line": 1701
         }
       ],
       "api": {
@@ -6476,13 +6618,13 @@
           "method": "POST",
           "path": "/v1/organizations/:id/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1765
+          "line": 1784
         },
         {
           "method": "POST",
           "path": "/v1/organizations/invitations/:id/accept",
           "source": "apps/api/src/app.ts",
-          "line": 1696
+          "line": 1715
         }
       ],
       "api": {
@@ -6586,13 +6728,13 @@
           "method": "PUT",
           "path": "/v1/organizations/:id/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 1785
+          "line": 1804
         },
         {
           "method": "DELETE",
           "path": "/v1/organizations/:id/members/:memberId",
           "source": "apps/api/src/app.ts",
-          "line": 1803
+          "line": 1822
         }
       ],
       "api": {
@@ -6696,19 +6838,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/policy-revisions",
           "source": "apps/api/src/app.ts",
-          "line": 1821
+          "line": 1840
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/policy-revisions",
           "source": "apps/api/src/app.ts",
-          "line": 1864
+          "line": 1883
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/policy-revisions/:revisionId/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1883
+          "line": 1902
         }
       ],
       "api": {
@@ -6813,19 +6955,19 @@
           "method": "GET",
           "path": "/v1/organizations/:id/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1926
+          "line": 1945
         },
         {
           "method": "POST",
           "path": "/v1/organizations/:id/teams",
           "source": "apps/api/src/app.ts",
-          "line": 1948
+          "line": 1967
         },
         {
           "method": "PUT",
           "path": "/v1/teams/:id/organization",
           "source": "apps/api/src/app.ts",
-          "line": 2002
+          "line": 2021
         }
       ],
       "api": {
@@ -6930,13 +7072,13 @@
           "method": "GET",
           "path": "/v1/organizations/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 1838
+          "line": 1857
         },
         {
           "method": "PUT",
           "path": "/v1/organizations/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 1849
+          "line": 1868
         }
       ],
       "api": {
@@ -7040,7 +7182,7 @@
           "method": "GET",
           "path": "/v1/architecture-patterns",
           "source": "apps/api/src/app.ts",
-          "line": 405
+          "line": 406
         }
       ],
       "api": {
@@ -7136,7 +7278,7 @@
           "method": "GET",
           "path": "/v1/architectures",
           "source": "apps/api/src/app.ts",
-          "line": 409
+          "line": 410
         }
       ],
       "api": {
@@ -7232,19 +7374,19 @@
           "method": "GET",
           "path": "/v1/architectures/:id",
           "source": "apps/api/src/app.ts",
-          "line": 438
+          "line": 439
         },
         {
           "method": "GET",
           "path": "/v1/architectures/:id/revisions",
           "source": "apps/api/src/app.ts",
-          "line": 461
+          "line": 462
         },
         {
           "method": "GET",
           "path": "/v1/architectures/:id/revisions/:revisionId",
           "source": "apps/api/src/app.ts",
-          "line": 665
+          "line": 666
         }
       ],
       "api": {
@@ -7375,7 +7517,7 @@
           "method": "POST",
           "path": "/v1/architectures",
           "source": "apps/api/src/app.ts",
-          "line": 417
+          "line": 418
         }
       ],
       "api": {
@@ -7477,7 +7619,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/revisions",
           "source": "apps/api/src/app.ts",
-          "line": 471
+          "line": 472
         }
       ],
       "api": {
@@ -7606,7 +7748,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/preview",
           "source": "apps/api/src/app.ts",
-          "line": 677
+          "line": 678
         }
       ],
       "api": {
@@ -7719,7 +7861,7 @@
           "method": "POST",
           "path": "/v1/architectures/:id/draft-preview",
           "source": "apps/api/src/app.ts",
-          "line": 532
+          "line": 533
         }
       ],
       "api": {
@@ -7839,13 +7981,13 @@
           "method": "GET",
           "path": "/v1/architectures/:id/organization-grants",
           "source": "apps/api/src/app.ts",
-          "line": 609
+          "line": 610
         },
         {
           "method": "PUT",
           "path": "/v1/architectures/:id/organization-grants",
           "source": "apps/api/src/app.ts",
-          "line": 619
+          "line": 620
         }
       ],
       "api": {
@@ -7965,13 +8107,13 @@
           "method": "POST",
           "path": "/v1/architectures/:id/pattern-migrations/preview",
           "source": "apps/api/src/app.ts",
-          "line": 633
+          "line": 634
         },
         {
           "method": "POST",
           "path": "/v1/architectures/:id/pattern-migrations",
           "source": "apps/api/src/app.ts",
-          "line": 651
+          "line": 652
         }
       ],
       "api": {
@@ -8091,13 +8233,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets",
           "source": "apps/api/src/app.ts",
-          "line": 740
+          "line": 741
         },
         {
           "method": "GET",
           "path": "/v1/architecture-targets/:id",
           "source": "apps/api/src/app.ts",
-          "line": 759
+          "line": 760
         }
       ],
       "api": {
@@ -8201,13 +8343,13 @@
           "method": "POST",
           "path": "/v1/architecture-targets",
           "source": "apps/api/src/app.ts",
-          "line": 748
+          "line": 749
         },
         {
           "method": "POST",
           "path": "/v1/architecture-targets/:id/consent",
           "source": "apps/api/src/app.ts",
-          "line": 770
+          "line": 771
         }
       ],
       "api": {
@@ -8311,7 +8453,7 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/observations",
           "source": "apps/api/src/app.ts",
-          "line": 785
+          "line": 786
         }
       ],
       "api": {
@@ -8414,7 +8556,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/observations",
           "source": "apps/api/src/app.ts",
-          "line": 798
+          "line": 799
         }
       ],
       "api": {
@@ -8513,7 +8655,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/health",
           "source": "apps/api/src/app.ts",
-          "line": 810
+          "line": 811
         }
       ],
       "api": {
@@ -8612,7 +8754,7 @@
           "method": "DELETE",
           "path": "/v1/architecture-targets/:id",
           "source": "apps/api/src/app.ts",
-          "line": 823
+          "line": 824
         }
       ],
       "api": {
@@ -8715,7 +8857,7 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/updates",
           "source": "apps/api/src/app.ts",
-          "line": 848
+          "line": 849
         }
       ],
       "api": {
@@ -8818,7 +8960,7 @@
           "method": "POST",
           "path": "/v1/architecture-targets/:id/operations",
           "source": "apps/api/src/app.ts",
-          "line": 835
+          "line": 836
         }
       ],
       "api": {
@@ -8921,7 +9063,7 @@
           "method": "POST",
           "path": "/v1/target-operations/batch",
           "source": "apps/api/src/app.ts",
-          "line": 877
+          "line": 878
         }
       ],
       "api": {
@@ -9024,13 +9166,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/operations",
           "source": "apps/api/src/app.ts",
-          "line": 886
+          "line": 887
         },
         {
           "method": "GET",
           "path": "/v1/target-operations/:id",
           "source": "apps/api/src/app.ts",
-          "line": 897
+          "line": 898
         }
       ],
       "api": {
@@ -9134,7 +9276,7 @@
           "method": "POST",
           "path": "/v1/target-operations/:id/cancel",
           "source": "apps/api/src/app.ts",
-          "line": 903
+          "line": 904
         }
       ],
       "api": {
@@ -9237,13 +9379,13 @@
           "method": "GET",
           "path": "/v1/architecture-targets/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 857
+          "line": 858
         },
         {
           "method": "PUT",
           "path": "/v1/architecture-targets/:id/update-policy",
           "source": "apps/api/src/app.ts",
-          "line": 866
+          "line": 867
         }
       ],
       "api": {
@@ -9347,19 +9489,19 @@
           "method": "POST",
           "path": "/v1/target-operations/claim",
           "source": "apps/api/src/app.ts",
-          "line": 910
+          "line": 911
         },
         {
           "method": "POST",
           "path": "/v1/target-operations/:id/state",
           "source": "apps/api/src/app.ts",
-          "line": 917
+          "line": 918
         },
         {
           "method": "POST",
           "path": "/v1/target-operations/:id/receipt",
           "source": "apps/api/src/app.ts",
-          "line": 929
+          "line": 930
         }
       ],
       "api": {
@@ -9377,7 +9519,7 @@
         "detail": "companion run-once with lease/fence checks",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 3209,
+          "line": 3210,
           "anchor": "async function companionCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -10511,7 +10653,7 @@
           "method": "POST",
           "path": "/v1/auth/register",
           "source": "apps/api/src/app.ts",
-          "line": 1189
+          "line": 1208
         }
       ],
       "api": {
@@ -10551,7 +10693,7 @@
         "detail": "Invitation registration only; no open/request self-registration form",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2048,
+          "line": 2050,
           "anchor": "await client.registerWithInvitation({"
         },
         "evidence": [
@@ -10610,19 +10752,19 @@
           "method": "POST",
           "path": "/v1/auth/login",
           "source": "apps/api/src/app.ts",
-          "line": 1200
+          "line": 1219
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/verify",
           "source": "apps/api/src/app.ts",
-          "line": 1266
+          "line": 1285
         },
         {
           "method": "POST",
           "path": "/v1/auth/logout",
           "source": "apps/api/src/app.ts",
-          "line": 1278
+          "line": 1297
         },
         {
           "method": "POST",
@@ -10743,7 +10885,7 @@
         "detail": "Login/MFA/sign out and /auth/device explicit permission review/approve/deny.",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1172,
+          "line": 1173,
           "anchor": "const result = await registryClient.verifyMfa({"
         },
         "evidence": [
@@ -10826,7 +10968,7 @@
           "method": "GET",
           "path": "/v1/me",
           "source": "apps/api/src/app.ts",
-          "line": 1634
+          "line": 1653
         }
       ],
       "api": {
@@ -10859,7 +11001,7 @@
         "detail": "Account/session identity",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 638,
+          "line": 639,
           "anchor": "registryClient.getMe()"
         },
         "evidence": [
@@ -10922,13 +11064,13 @@
           "method": "POST",
           "path": "/v1/auth/email-verification/request",
           "source": "apps/api/src/app.ts",
-          "line": 1214
+          "line": 1233
         },
         {
           "method": "POST",
           "path": "/v1/auth/email-verification/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1225
+          "line": 1244
         }
       ],
       "api": {
@@ -10968,7 +11110,7 @@
         "detail": "Confirmation route; no request/resend action",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4296,
+          "line": 4298,
           "anchor": "await client.confirmEmailVerification({ token });"
         },
         "evidence": [
@@ -11027,13 +11169,13 @@
           "method": "POST",
           "path": "/v1/auth/password-reset/request",
           "source": "apps/api/src/app.ts",
-          "line": 1235
+          "line": 1254
         },
         {
           "method": "POST",
           "path": "/v1/auth/password-reset/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1246
+          "line": 1265
         }
       ],
       "api": {
@@ -11073,7 +11215,7 @@
         "detail": "Password reset forms",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 1195,
+          "line": 1196,
           "anchor": "await registryClient.requestPasswordReset(input);"
         },
         "evidence": [
@@ -11132,19 +11274,19 @@
           "method": "POST",
           "path": "/v1/auth/account/password",
           "source": "apps/api/src/app.ts",
-          "line": 1286
+          "line": 1305
         },
         {
           "method": "POST",
           "path": "/v1/auth/account/email-change",
           "source": "apps/api/src/app.ts",
-          "line": 1300
+          "line": 1319
         },
         {
           "method": "POST",
           "path": "/v1/auth/email-change/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1256
+          "line": 1275
         }
       ],
       "api": {
@@ -11184,7 +11326,7 @@
         "detail": "Account security forms",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4508,
+          "line": 4510,
           "anchor": "await client.changePassword({ currentPassword: passwordInput.currentPassword, password: passwordInput.password });"
         },
         "evidence": [
@@ -11243,25 +11385,25 @@
           "method": "GET",
           "path": "/v1/auth/mfa",
           "source": "apps/api/src/app.ts",
-          "line": 1315
+          "line": 1334
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/totp/enroll",
           "source": "apps/api/src/app.ts",
-          "line": 1326
+          "line": 1345
         },
         {
           "method": "POST",
           "path": "/v1/auth/mfa/totp/confirm",
           "source": "apps/api/src/app.ts",
-          "line": 1338
+          "line": 1357
         },
         {
           "method": "DELETE",
           "path": "/v1/auth/mfa/totp",
           "source": "apps/api/src/app.ts",
-          "line": 1349
+          "line": 1368
         }
       ],
       "api": {
@@ -11301,7 +11443,7 @@
         "detail": "MFA setup/settings",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 5348,
+          "line": 5350,
           "anchor": "const nextEnrollment = await client.startTotpEnrollment({ password: passwordOverride ?? password, label: \"1Password\" });"
         },
         "evidence": [
@@ -11380,19 +11522,19 @@
           "method": "GET",
           "path": "/v1/auth/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1360
+          "line": 1379
         },
         {
           "method": "POST",
           "path": "/v1/auth/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1371
+          "line": 1390
         },
         {
           "method": "DELETE",
           "path": "/v1/auth/api-tokens/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1383
+          "line": 1402
         }
       ],
       "api": {
@@ -11425,7 +11567,7 @@
         "detail": "Token settings",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 4580,
+          "line": 4582,
           "anchor": "const token = await client.createApiToken({"
         },
         "evidence": [
@@ -11629,13 +11771,13 @@
           "method": "GET",
           "path": "/v1/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1395
+          "line": 1414
         },
         {
           "method": "GET",
           "path": "/v1/site",
           "source": "apps/api/src/app.ts",
-          "line": 1417
+          "line": 1436
         }
       ],
       "api": {
@@ -11738,13 +11880,13 @@
           "method": "GET",
           "path": "/v1/admin/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1401
+          "line": 1420
         },
         {
           "method": "PUT",
           "path": "/v1/admin/branding",
           "source": "apps/api/src/app.ts",
-          "line": 1409
+          "line": 1428
         }
       ],
       "api": {
@@ -11847,13 +11989,13 @@
           "method": "GET",
           "path": "/v1/admin/site",
           "source": "apps/api/src/app.ts",
-          "line": 1425
+          "line": 1444
         },
         {
           "method": "PUT",
           "path": "/v1/admin/site",
           "source": "apps/api/src/app.ts",
-          "line": 1433
+          "line": 1452
         }
       ],
       "api": {
@@ -11956,19 +12098,19 @@
           "method": "GET",
           "path": "/v1/admin/registration",
           "source": "apps/api/src/app.ts",
-          "line": 1445
+          "line": 1464
         },
         {
           "method": "PUT",
           "path": "/v1/admin/registration",
           "source": "apps/api/src/app.ts",
-          "line": 1456
+          "line": 1475
         },
         {
           "method": "POST",
           "path": "/v1/admin/registration/invitations",
           "source": "apps/api/src/app.ts",
-          "line": 1472
+          "line": 1491
         }
       ],
       "api": {
@@ -12072,13 +12214,13 @@
           "method": "GET",
           "path": "/v1/admin/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1487
+          "line": 1506
         },
         {
           "method": "PUT",
           "path": "/v1/admin/sharing",
           "source": "apps/api/src/app.ts",
-          "line": 1507
+          "line": 1526
         }
       ],
       "api": {
@@ -12170,13 +12312,13 @@
           "method": "GET",
           "path": "/v1/admin/providers",
           "source": "apps/api/src/app.ts",
-          "line": 1531
+          "line": 1550
         },
         {
           "method": "PUT",
           "path": "/v1/admin/providers/:key",
           "source": "apps/api/src/app.ts",
-          "line": 1542
+          "line": 1561
         }
       ],
       "api": {
@@ -12279,13 +12421,13 @@
           "method": "GET",
           "path": "/v1/admin/users",
           "source": "apps/api/src/app.ts",
-          "line": 1558
+          "line": 1577
         },
         {
           "method": "POST",
           "path": "/v1/admin/users/:id/actions",
           "source": "apps/api/src/app.ts",
-          "line": 1569
+          "line": 1588
         }
       ],
       "api": {
@@ -12388,7 +12530,7 @@
           "method": "PUT",
           "path": "/v1/admin/users/:id/roles",
           "source": "apps/api/src/app.ts",
-          "line": 1585
+          "line": 1604
         }
       ],
       "api": {
@@ -12490,13 +12632,13 @@
           "method": "GET",
           "path": "/v1/admin/api-tokens",
           "source": "apps/api/src/app.ts",
-          "line": 1601
+          "line": 1620
         },
         {
           "method": "DELETE",
           "path": "/v1/admin/api-tokens/:id",
           "source": "apps/api/src/app.ts",
-          "line": 1612
+          "line": 1631
         }
       ],
       "api": {
@@ -12599,7 +12741,7 @@
           "method": "GET",
           "path": "/v1/admin/audit",
           "source": "apps/api/src/app.ts",
-          "line": 1623
+          "line": 1642
         }
       ],
       "api": {
@@ -12719,6 +12861,30 @@
           {
             "level": "source",
             "detail": "Initial 2026-09-29 audit: init / validate / scan / package. Runtime parity is not implied."
+          },
+          {
+            "level": "contract",
+            "detail": "Frontmatter-only directory and ZIP intake passes with default version 0.1.0 and private visibility; duplicate keys, aliases, invalid metadata and oversize YAML fail closed.",
+            "source": {
+              "path": "packages/skill-package/test/package-intake.test.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Scanner regression fixtures copied from the seven requested /tmp/fp files produce no credential-exfiltration finding. Direct named-token authentication to its matching static HTTPS service is allowed; variable/unrelated hosts, environment dumps and encoded sends remain flagged. Scanner contract advances to v2 so cached assessments refresh. Bounded static analysis is not a full program proof.",
+            "source": {
+              "path": "packages/skill-package/test/scan.test.ts",
+              "line": 1
+            }
+          },
+          {
+            "level": "contract",
+            "detail": "Directory, ZIP and normalized-file boundary tests pass at 5 MiB text and reject overflow. Image bytes use a separate budget; file count and archive limits remain bounded.",
+            "source": {
+              "path": "packages/skill-package/test/package-size.e2e.test.ts",
+              "line": 1
+            }
           }
         ]
       },
@@ -12727,7 +12893,7 @@
         "detail": "Archive submission performs scanning; no scaffold/package workspace editor",
         "source": {
           "path": "apps/web/src/App.tsx",
-          "line": 2253,
+          "line": 2255,
           "anchor": "const submitted = await client.submitArchive({"
         },
         "evidence": [
@@ -12797,7 +12963,7 @@
         "detail": "export/install/list/updates/update/rollback",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2075,
+          "line": 2076,
           "anchor": "async function installCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -12882,7 +13048,7 @@
         "detail": "architectures observe/health; bootstrap codex --dry-run",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2541,
+          "line": 2542,
           "anchor": "async function codexWorkspaceCommand(parsed: ParsedArgs, runtime: CliRuntime): Promise<number> {"
         },
         "evidence": [
@@ -13052,7 +13218,7 @@
         "detail": "libraries unbind-local",
         "source": {
           "path": "apps/cli/src/cli.ts",
-          "line": 2003,
+          "line": 2004,
           "anchor": "async function libraryCommand(parsed: ParsedArgs, runtime: CliRuntime, bundles = false): Promise<number> {"
         },
         "evidence": [
@@ -13185,25 +13351,25 @@
           "method": "GET",
           "path": "/health",
           "source": "apps/api/src/app.ts",
-          "line": 322
+          "line": 323
         },
         {
           "method": "GET",
           "path": "/ready",
           "source": "apps/api/src/app.ts",
-          "line": 332
+          "line": 333
         },
         {
           "method": "GET",
           "path": "/version.json",
           "source": "apps/api/src/app.ts",
-          "line": 327
+          "line": 328
         },
         {
           "method": "GET",
           "path": "/v1/capabilities",
           "source": "apps/api/src/app.ts",
-          "line": 362
+          "line": 363
         }
       ],
       "api": {
@@ -13485,7 +13651,7 @@
           "method": "GET",
           "path": "/v1/mcp/session",
           "source": "apps/api/src/app.ts",
-          "line": 2146
+          "line": 2165
         }
       ],
       "api": {
@@ -14977,7 +15143,7 @@
     "A status does not certify permission parity across credential kinds.",
     "No production deployment or real ChatGPT/Claude host acceptance in this audit.",
     "All registered business API routes are mapped, including dynamically registered profile/suite routes and OAuth scope routes.",
-    "MCP request body ceiling is 14 MiB plus a 64 KiB JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 10 MiB. These transport limits are not domain or real-host acceptance proof.",
+    "MCP request body ceiling is 40 MiB plus a 64 KiB JSON-RPC envelope; metadata responses are bounded to 512 KiB and exports to 40 MiB. These transport limits are not domain or real-host acceptance proof.",
     "HOST-01 records standalone operator source and local contract tests. Canonical Compose interpretation/interruption and restored TOTP, recovery-code, authenticated non-owner denial and revoked-session denial are prepared. Fresh install, exact c74ecd33-to-candidate database/runtime upgrade and full-app restore require actual canonical host-rehearsal.json; no new Linux runtime result, external backup durability, public image, deployed behavior or arm64 proof has been recorded here.",
     "Final reconciliation preserves all426 original criterion identities/source descriptors and24 groups with per-ID current bindings. None is declared complete from counts or this matrix. Five QUALITY corrections and HIST adapters require renewed independent source review and exact final canonical acceptance. Local evaluation hardlinks retain the existing bounded regular-file behavior."
   ],
@@ -18191,7 +18357,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 309
+        "line": 308
       }
     },
     {
@@ -18201,7 +18367,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 310
+        "line": 309
       }
     },
     {
@@ -18211,7 +18377,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 311
+        "line": 310
       }
     },
     {
@@ -18221,7 +18387,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 312
+        "line": 311
       }
     },
     {
@@ -18231,7 +18397,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 315
+        "line": 314
       }
     },
     {
@@ -18241,7 +18407,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 316
+        "line": 315
       }
     },
     {
@@ -18251,7 +18417,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 317
+        "line": 316
       }
     },
     {
@@ -18261,7 +18427,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 320
+        "line": 319
       }
     },
     {
@@ -18271,7 +18437,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 322
+        "line": 321
       }
     },
     {
@@ -18281,7 +18447,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 324
+        "line": 323
       }
     },
     {
@@ -18291,7 +18457,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 326
+        "line": 325
       }
     },
     {
@@ -18301,7 +18467,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 328
+        "line": 327
       }
     },
     {
@@ -18311,7 +18477,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 330
+        "line": 329
       }
     },
     {
@@ -18321,7 +18487,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 332
+        "line": 331
       }
     },
     {
@@ -18331,7 +18497,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 334
+        "line": 333
       }
     },
     {
@@ -18341,7 +18507,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 336
+        "line": 335
       }
     },
     {
@@ -18352,7 +18518,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 338
+        "line": 337
       }
     },
     {
@@ -18362,7 +18528,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 340
+        "line": 339
       }
     },
     {
@@ -18372,7 +18538,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 342
+        "line": 341
       }
     },
     {
@@ -18382,7 +18548,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 344
+        "line": 343
       }
     },
     {
@@ -18402,7 +18568,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 346
+        "line": 345
       }
     },
     {
@@ -18412,7 +18578,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 348
+        "line": 347
       }
     },
     {
@@ -18462,7 +18628,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 356
+        "line": 355
       }
     },
     {
@@ -18475,7 +18641,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 358
+        "line": 357
       }
     },
     {
@@ -18488,7 +18654,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 359
+        "line": 358
       }
     },
     {
@@ -18527,7 +18693,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 361
+        "line": 360
       }
     },
     {
@@ -18566,7 +18732,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 362
+        "line": 361
       }
     },
     {
@@ -18591,7 +18757,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 366
+        "line": 365
       }
     },
     {
@@ -18605,7 +18771,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 368
+        "line": 367
       }
     },
     {
@@ -18624,7 +18790,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 369
+        "line": 368
       }
     },
     {
@@ -18643,7 +18809,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 371
+        "line": 370
       }
     },
     {
@@ -18654,7 +18820,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 373
+        "line": 372
       }
     },
     {
@@ -18664,7 +18830,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 375
+        "line": 374
       }
     },
     {
@@ -18674,7 +18840,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 377
+        "line": 376
       }
     },
     {
@@ -18684,7 +18850,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 379
+        "line": 378
       }
     },
     {
@@ -18694,7 +18860,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 381
+        "line": 380
       }
     },
     {
@@ -18704,7 +18870,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 383
+        "line": 382
       }
     },
     {
@@ -18714,7 +18880,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 3616
+        "line": 3617
       }
     },
     {
@@ -18726,7 +18892,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 3967
+        "line": 3968
       }
     },
     {
@@ -18736,7 +18902,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 391
+        "line": 390
       }
     },
     {
@@ -18833,7 +18999,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 389
+        "line": 388
       }
     },
     {
@@ -18843,7 +19009,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 426
+        "line": 425
       }
     },
     {
@@ -18863,7 +19029,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 298
+        "line": 297
       }
     },
     {
@@ -18873,7 +19039,7 @@
       ],
       "source": {
         "path": "apps/cli/src/cli.ts",
-        "line": 293
+        "line": 292
       }
     },
     {
