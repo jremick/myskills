@@ -15,7 +15,7 @@ Use `run-<service>.sh create` to create stopped containers.
 Phase 0 starts only this app's Postgres. API, web, migrate and backup remain
 stopped. Only the owner-role one-shot may run migrations.
 
-The pinned images were built from `b8e064629c90406d81e44a17a162a376168deaf5`,
+The original pinned images were built from `b8e064629c90406d81e44a17a162a376168deaf5`,
 whose application source is `3deeb95e442353e67446fd83f79055959f4a54ab`.
 Later commits containing runtime scripts do not change that image provenance.
 
@@ -60,3 +60,7 @@ with `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`. Keep the flag if adding
 rejection and Resend TLS. Remove this workaround after the Node release with
 nodejs/node#66871 ships and the pinned base is bumped. Railway production is
 unchanged and needs separate approval.
+
+The API/migrate images were rebuilt for eMudhra fix 1 from
+`d59c75c1bfe56c40f82c315fa2cbab879a0069a4`. Their immutable IDs are in
+`images.conf`; non-Node images retain the original pins.
