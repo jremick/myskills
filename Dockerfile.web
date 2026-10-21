@@ -29,6 +29,15 @@ RUN npm run build -w @myskills-app/core \
 RUN MYSKILLS_BUILD_REVISION=${MYSKILLS_BUILD_REVISION} node scripts/write-build-info.mjs apps/web/dist/version.json
 
 FROM nginx:1.31-alpine AS web
+# Runtime Alpine 3.24: retain the base and update the system CA store.
+RUN apk add --no-cache ca-certificates \
+  && apk upgrade --no-cache ca-certificates ca-certificates-bundle \
+  && for package in ca-certificates ca-certificates-bundle; do \
+       installed="$(apk info -v --installed "$package" | grep -E "^${package}-[0-9]+-r[0-9]+$")" \
+       && version="${installed#${package}-}" \
+       && test "$(apk version -t "$version" 20261020-r0)" != '<' \
+       && printf '%s\n' "$installed" || exit 1; \
+     done
 ENV PORT=80 \
     API_PROXY_TARGET=http://127.0.0.1:3001 \
     MCP_PROXY_TARGET=http://127.0.0.1:3002

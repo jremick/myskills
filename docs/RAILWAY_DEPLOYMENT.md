@@ -310,6 +310,20 @@ it unset until the MCP service exists, because nginx resolves it at startup.
 
 `Dockerfile.api` and `Dockerfile.web` are the current Railway image sources. CI and release verification build those exact files in addition to the root multi-target `Dockerfile` used by the production Compose example. The root, API, and web Dockerfiles default to Node 22; the backup Dockerfile pins Node 24. CI verifies both supported Node lines. Production starts use injected variables and do not copy the local `.env` into images. These source defaults do not establish the runtime version of an earlier deployment.
 
+### Temporary eMudhra trust hardening (2026-10-21)
+
+The Railway API, backup, MCP, and web Dockerfiles require both `ca-certificates`
+and `ca-certificates-bundle` at `20261020-r0` or newer, with a build-time guard.
+The Node images select the system CA store through `NODE_OPTIONS`,
+`SSL_CERT_FILE`, and an explicit `--use-openssl-ca` command-line flag. The API
+image adds the flag to all three Node calls in its copied startup script;
+the source script and its migration, seed, and server sequence stay unchanged.
+The final build step runs as `node`, requires the eMudhra probe to fail with
+`UNABLE_TO_GET_ISSUER_CERT_LOCALLY`, and checks Resend and GitHub TLS with 30-second
+timeouts. These checks need build-time egress. The web image serves assets and
+uses HTTP upstream defaults, so it only gets the CA update and guard. These
+source changes do not establish deployment or runtime verification.
+
 ## Deployment and Recovery Readback
 
 Final deployments from `d8c7179789bdbf0930fe0e496081377f6c63cd20`,
