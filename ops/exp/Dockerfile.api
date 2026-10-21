@@ -1,0 +1,56 @@
+FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS build
+WORKDIR /app
+RUN npm install -g npm@11.12.1
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/cli/package.json ./apps/cli/package.json
+COPY apps/mcp/package.json ./apps/mcp/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY apps/site/package.json ./apps/site/package.json
+COPY packages/auth/package.json ./packages/auth/package.json
+COPY packages/core/package.json ./packages/core/package.json
+COPY packages/skill-package/package.json ./packages/skill-package/package.json
+RUN npm ci
+COPY tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+COPY scripts ./scripts
+ARG MYSKILLS_BUILD_REVISION
+RUN MYSKILLS_BUILD_REVISION=${MYSKILLS_BUILD_REVISION} node scripts/write-build-info.mjs \
+  && npm run build -w @myskills-app/core \
+  && npm run build -w @myskills-app/auth \
+  && npm run build -w @myskills-app/skill-package \
+  && npm run build -w @myskills-app/api \
+  && npm prune --omit=dev
+
+FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS api
+# The pinned Node base contains only the bundle; install the CA package as well.
+RUN apk add --no-cache ca-certificates \
+  && apk upgrade --no-cache ca-certificates ca-certificates-bundle \
+  && for package in ca-certificates ca-certificates-bundle; do \
+       installed="$(apk info -v --installed "$package" | grep -E "^${package}-[0-9]+-r[0-9]+$")" \
+       && version="${installed#${package}-}" \
+       && test "$(apk version -t "$version" 20261020-r0)" != '<' \
+       && printf '%s\n' "$installed" || exit 1; \
+     done
+# TODO(emudhra-2026-10): drop --use-openssl-ca / SSL_CERT_FILE once the Node release containing nodejs/node#66871 ships and the base image is bumped
+ENV NODE_OPTIONS="--use-openssl-ca" \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3001
+WORKDIR /app
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/build-info.json ./build-info.json
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/packages ./packages
+COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/apps/api/migrations ./apps/api/migrations
+USER node
+EXPOSE 3001
+# The owner-role migrate container overrides CMD with dist/db/migrate.js.
+# Runtime startup must never call deploy/start-api.sh or seed.
+# Build-time egress is required (L3 accepted); each control runs as the runtime user.
+RUN timeout 30s node --use-openssl-ca -e "require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',()=>{console.error('EMUDHRA_UNEXPECTED_SUCCESS');process.exit(1)}).on('error',e=>{console.log('EMUDHRA_NEGATIVE '+e.code);process.exit(e.code === 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY' ? 0 : 1)})" \
+  && timeout 30s node --use-openssl-ca -e "require('https').get('https://api.resend.com/',r=>{console.log('RESEND_TLS_OK '+r.statusCode);process.exit(0)}).on('error',e=>{console.error(e.code);process.exit(1)})" \
+  && timeout 30s node --use-openssl-ca -e "require('https').get('https://api.github.com/',r=>{console.log('GITHUB_TLS_OK '+r.statusCode);process.exit(0)}).on('error',e=>{console.error(e.code);process.exit(1)})"
+CMD ["node", "--use-openssl-ca", "apps/api/dist/server.js"]
