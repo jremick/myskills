@@ -450,6 +450,110 @@ test("HTTP MCP transport negotiates modern discovery and preserves friendly tool
   assert.equal(body.result._meta["io.modelcontextprotocol/serverInfo"].name, "myskills-app");
 });
 
+// Failure inventory: oversized tool arguments reach expensive schema validation;
+// unbounded records reach the API; reused legacy instances misroute response IDs.
+// The upstream fixture proves adapter admission and forwarding, not API validation.
+for (const modern of [false, true]) {
+  test(`HTTP MCP transport bounds tool input elements before schema validation (modern=${modern})`, async (t) => {
+    const calls: unknown[] = [];
+    const server = createAiSkillsMcpHttpServer({
+      fetchImpl: async (url, init) => {
+        if (url.endsWith("/v1/mcp/session")) return jsonResponse(200, mcpSession(["libraries:write"]));
+        calls.push(JSON.parse(init?.body ?? "{}"));
+        return jsonResponse(200, { accepted: true });
+      },
+    });
+    const url = await listen(t, server);
+    for (const count of [10_001, 2_000]) {
+      const args = { path: { entryId: "entry" }, body: { snapshotId: "snapshot", paths: Array.from({ length: count }, (_, i) => `skills/${i}`) } };
+      const params = { name: "library_entries_preview", arguments: args };
+      const response = modern
+        ? await postModern(url, "tools/call", "aiss_limit_test", params)
+        : await postBody(url, {
+          accept: "application/json, text/event-stream",
+          authorization: "Bearer aiss_limit_test",
+          "content-type": "application/json",
+          "mcp-protocol-version": "2025-11-25",
+        }, JSON.stringify({ jsonrpc: "2.0", id: count, method: "tools/call", params }));
+      assert.equal(response.status, 200, response.body);
+      const body = JSON.parse(response.body);
+      assert.equal(body.error, undefined, response.body);
+      if (!modern) assert.equal(body.id, count);
+      if (count === 10_001) {
+        assert.equal(body.result.isError, true);
+        assert.match(JSON.stringify(body.result.content), /maximum of 10000 elements/);
+        assert.equal(calls.length, 0, "oversized input must not reach the API");
+      } else {
+        assert.equal(body.result.isError, undefined, response.body);
+        assert.deepEqual(calls, [args.body]);
+      }
+    }
+  });
+}
+
+for (const record of ["mappings", "input"] as const) {
+  test(`HTTP MCP transport enforces the ${record} key limit and accepts its boundary`, async (t) => {
+    const calls: unknown[] = [];
+    const server = createAiSkillsMcpHttpServer({
+      fetchImpl: async (url, init) => {
+        if (url.endsWith("/v1/mcp/session")) return jsonResponse(200, mcpSession(["libraries:write", "skills:read", "skills:submit"]));
+        calls.push(JSON.parse(init?.body ?? "{}"));
+        return jsonResponse(200, { accepted: true });
+      },
+    });
+    const url = await listen(t, server);
+    const limit = record === "mappings" ? 2_000 : 256;
+    for (const count of [limit + 1, limit]) {
+      const values = Object.fromEntries(Array.from({ length: count }, (_, i) => [`key-${i}`, record === "mappings" ? { name: `skill-${i}` } : i]));
+      const payload = record === "mappings" ? { snapshotId: "snapshot", paths: ["skills/example"], mappings: values } : values;
+      const params = record === "mappings"
+        ? { name: "library_entries_preview", arguments: { path: { entryId: "entry" }, body: payload } }
+        : { name: "curate_bundle", arguments: { action: "create", input: payload } };
+      const response = await postModern(url, "tools/call", "aiss_record_test", params);
+      assert.equal(response.status, 200, response.body);
+      const body = JSON.parse(response.body);
+      assert.equal(body.error, undefined, response.body);
+      if (count > limit) {
+        assert.equal(body.result.isError, true);
+        assert.match(JSON.stringify(body.result.content), new RegExp(`${record} must contain at most ${limit} keys`));
+        assert.equal(calls.length, 0, "oversized records must not reach the API");
+      } else {
+        assert.equal(body.result.isError, undefined, response.body);
+        assert.deepEqual(calls, [payload]);
+      }
+    }
+  });
+}
+
+test("HTTP MCP transport gives sequential legacy requests their own responses and IDs", async (t) => {
+  const calls: string[] = [];
+  const server = createAiSkillsMcpHttpServer({
+    fetchImpl: async (url) => {
+      if (url.endsWith("/v1/mcp/session")) return jsonResponse(200, mcpSession());
+      const query = new URL(url).searchParams.get("q")!;
+      calls.push(query);
+      return jsonResponse(200, { skills: [{ ...publicSkill(), slug: `${query}-skill` }] });
+    },
+  });
+  const url = await listen(t, server);
+  for (const id of ["first-legacy", "second-legacy"]) {
+    const response = await postBody(url, {
+      accept: "application/json, text/event-stream",
+      authorization: "Bearer aiss_legacy_test",
+      "content-type": "application/json",
+      "mcp-protocol-version": "2025-11-25",
+    }, JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "search_skills", arguments: { query: id } } }));
+    assert.equal(response.status, 200, response.body);
+    const body = JSON.parse(response.body);
+    assert.equal(body.id, id);
+    assert.equal(body.error, undefined, response.body);
+    assert.equal(body.result.isError, undefined, response.body);
+    assert.match(JSON.stringify(body.result), new RegExp(`${id}-skill`));
+    assert.equal(response.body.includes(id === "first-legacy" ? "second-legacy" : "first-legacy"), false);
+  }
+  assert.deepEqual(calls, ["first-legacy", "second-legacy"]);
+});
+
 test("HTTP MCP transport rejects malformed modern metadata without legacy fallback", async (t) => {
   const calls: string[] = [];
   const server = createAiSkillsMcpHttpServer({
