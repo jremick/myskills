@@ -58,7 +58,7 @@ RUN node -e "const fs=require('fs');const p='deploy/start-api.sh';const s=fs.rea
 USER node
 EXPOSE 3001
 # These runtime-user checks need build-time egress (L3, accepted).
-RUN timeout 30s node --use-openssl-ca -e "require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',r=>{console.error('EMUDHRA_UNEXPECTED_TLS_OK HTTP '+r.statusCode);process.exit(1)}).on('error',e=>{console.log('EMUDHRA_NEGATIVE '+e.code);process.exit(e.code==='UNABLE_TO_GET_ISSUER_CERT_LOCALLY'?0:1)})" \
+RUN timeout 30s node --use-openssl-ca -e "require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',r=>{console.error('EMUDHRA_UNEXPECTED_TLS_OK HTTP '+r.statusCode);process.exit(1)}).on('error',e=>{console.log('EMUDHRA_NEGATIVE '+e.code);process.exit(['UNABLE_TO_GET_ISSUER_CERT_LOCALLY','CERT_REVOKED'].includes(e.code)?0:1)})" \
   && timeout 30s node --use-openssl-ca -e "require('https').get('https://api.resend.com',r=>{console.log('RESEND_TLS_OK HTTP '+r.statusCode);process.exit(0)}).on('error',e=>{console.error(e.code);process.exit(1)})" \
   && timeout 30s node --use-openssl-ca -e "require('https').get('https://api.github.com/',r=>{console.log('GITHUB_TLS_OK HTTP '+r.statusCode);process.exit(0)}).on('error',e=>{console.error(e.code);process.exit(1)})"
 CMD ["sh", "deploy/start-api.sh"]

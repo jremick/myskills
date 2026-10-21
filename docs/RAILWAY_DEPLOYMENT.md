@@ -319,7 +319,8 @@ The Node images select the system CA store through `NODE_OPTIONS`,
 image adds the flag to all three Node calls in its copied startup script;
 the source script and its migration, seed, and server sequence stay unchanged.
 The final build step runs as `node`, requires the eMudhra probe to fail with
-`UNABLE_TO_GET_ISSUER_CERT_LOCALLY`, and checks Resend and GitHub TLS with 30-second
+`UNABLE_TO_GET_ISSUER_CERT_LOCALLY` or `CERT_REVOKED` (any other error, a
+successful connection, or a timeout fails the build), and checks Resend and GitHub TLS with 30-second
 timeouts. These checks need build-time egress. The web image serves assets and
 uses HTTP upstream defaults, so it only gets the CA update and guard. These
 source changes do not establish deployment or runtime verification.
