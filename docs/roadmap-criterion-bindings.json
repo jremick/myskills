@@ -740,8 +740,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 31,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 33,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerApplicationTools(server, client, { session: options.session });"
         },
         {
@@ -760,8 +760,8 @@
       "checks": [
         {
           "path": "apps/mcp/test/http.test.ts",
-          "line": 533,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "line": 637,
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"production Compose MCP example reaches OAuth authentication through the configured proxy host\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -2116,8 +2116,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -2137,7 +2137,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 411,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport negotiates modern discovery and preserves friendly tools alongside application actions\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -2418,8 +2418,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -2439,7 +2439,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 316,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport executes tools with the request bearer token\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -3158,8 +3158,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 21,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 23,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}): McpServer {"
         },
         {
@@ -3179,7 +3179,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 13,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects missing bearer tokens before registry calls\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -3449,8 +3449,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 21,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 23,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}): McpServer {"
         },
         {
@@ -3470,7 +3470,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 13,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects missing bearer tokens before registry calls\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6225,8 +6225,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 21,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 23,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}): McpServer {"
         },
         {
@@ -6246,7 +6246,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 110,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects declared and streamed oversized bodies before SDK parsing\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6272,8 +6272,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 109,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 111,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "server.registerTool("
         },
         {
@@ -6293,7 +6293,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 411,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport negotiates modern discovery and preserves friendly tools alongside application actions\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6319,8 +6319,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 131,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 133,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "server.registerTool("
         },
         {
@@ -6340,7 +6340,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 316,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport executes tools with the request bearer token\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6366,8 +6366,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -6387,7 +6387,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 85,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport only trusts forwarded client IPs when proxy hops are explicit\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6413,8 +6413,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 21,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 23,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}): McpServer {"
         },
         {
@@ -6434,7 +6434,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 13,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects missing bearer tokens before registry calls\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6460,8 +6460,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 31,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 33,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerApplicationTools(server, client, { session: options.session });"
         },
         {
@@ -6481,7 +6481,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 85,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport only trusts forwarded client IPs when proxy hops are explicit\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6507,8 +6507,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 21,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 23,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}): McpServer {"
         },
         {
@@ -6527,8 +6527,8 @@
       "checks": [
         {
           "path": "apps/mcp/test/http.test.ts",
-          "line": 453,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "line": 557,
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects malformed modern metadata without legacy fallback\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6554,8 +6554,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -6575,7 +6575,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 316,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport executes tools with the request bearer token\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6607,8 +6607,8 @@
         },
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -6627,8 +6627,8 @@
       "checks": [
         {
           "path": "apps/mcp/test/http.test.ts",
-          "line": 453,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "line": 557,
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects malformed modern metadata without legacy fallback\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6660,8 +6660,8 @@
         },
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 199,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 201,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "server.registerTool("
         },
         {
@@ -6681,7 +6681,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 13,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects missing bearer tokens before registry calls\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6707,8 +6707,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 131,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 133,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "server.registerTool("
         },
         {
@@ -6728,7 +6728,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 316,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport executes tools with the request bearer token\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6754,8 +6754,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -6775,7 +6775,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 316,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport executes tools with the request bearer token\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -6801,8 +6801,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -6822,7 +6822,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 85,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport only trusts forwarded client IPs when proxy hops are explicit\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -9519,8 +9519,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -9540,7 +9540,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 316,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport executes tools with the request bearer token\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -10454,8 +10454,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 32,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 34,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerApplicationHandoffTools(server, { appBaseUrl: options.trustedAppBaseUrl });"
         },
         {
@@ -10475,7 +10475,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 13,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects missing bearer tokens before registry calls\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -10501,8 +10501,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -10521,8 +10521,8 @@
       "checks": [
         {
           "path": "apps/mcp/test/http.test.ts",
-          "line": 561,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "line": 665,
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects untrusted Host and Origin before registry calls\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -10619,8 +10619,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -10640,7 +10640,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 411,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport negotiates modern discovery and preserves friendly tools alongside application actions\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -10666,8 +10666,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 21,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 23,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}): McpServer {"
         },
         {
@@ -10687,7 +10687,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 13,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects missing bearer tokens before registry calls\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -10713,8 +10713,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 131,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 133,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "server.registerTool("
         },
         {
@@ -10733,8 +10733,8 @@
       "checks": [
         {
           "path": "apps/mcp/test/http.test.ts",
-          "line": 533,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "line": 637,
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"production Compose MCP example reaches OAuth authentication through the configured proxy host\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -10760,8 +10760,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -10780,8 +10780,8 @@
       "checks": [
         {
           "path": "apps/mcp/test/http.test.ts",
-          "line": 453,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "line": 557,
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport rejects malformed modern metadata without legacy fallback\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -10807,8 +10807,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -10827,8 +10827,8 @@
       "checks": [
         {
           "path": "apps/mcp/test/http.test.ts",
-          "line": 533,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "line": 637,
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"production Compose MCP example reaches OAuth authentication through the configured proxy host\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -14395,8 +14395,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -14416,7 +14416,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 316,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport executes tools with the request bearer token\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -14442,8 +14442,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -14463,7 +14463,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 316,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport executes tools with the request bearer token\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -14489,8 +14489,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 28,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 30,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "registerBundleTools(server, client, { session: options.session });"
         },
         {
@@ -14510,7 +14510,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 85,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport only trusts forwarded client IPs when proxy hops are explicit\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",
@@ -14536,8 +14536,8 @@
       "sources": [
         {
           "path": "apps/mcp/src/server.ts",
-          "line": 21,
-          "sha256": "112e2f59c1f28a5f900d80231114c3e236a7110d93d9372c31c79882ea60d6b3",
+          "line": 23,
+          "sha256": "03d4224f922b27d39b733efda7aecf666ecddc4a0dee356e6af5ddedcc46dacd",
           "anchor": "export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}): McpServer {"
         },
         {
@@ -14557,7 +14557,7 @@
         {
           "path": "apps/mcp/test/http.test.ts",
           "line": 85,
-          "sha256": "430ed586e488b82d6ab90f7d5e16b08020f914a0701aa404319c7d0b9dd06f6e",
+          "sha256": "1b370e4941e3e1916bcf8adb65c7db281d6a8da8436fa1534699bcef34a5cfcf",
           "anchor": "test(\"HTTP MCP transport only trusts forwarded client IPs when proxy hops are explicit\", async (t) => {",
           "command": "node --import tsx --test apps/mcp/test/http.test.ts",
           "execution": "local_node22_working_source_pass",

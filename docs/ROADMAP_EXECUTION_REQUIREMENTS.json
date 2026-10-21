@@ -1244,7 +1244,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 31
+            "line": 33
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -1258,7 +1258,7 @@
         "checks": [
           {
             "path": "apps/mcp/test/http.test.ts",
-            "line": 533,
+            "line": 637,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/mcp/test/http.test.ts",
             "receipt": "final-mcp-current-suite.log (current HTTP contracts passed)"
@@ -3433,7 +3433,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -3911,7 +3911,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -4995,7 +4995,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 21
+            "line": 23
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -5402,7 +5402,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 21
+            "line": 23
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -9749,7 +9749,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 21
+            "line": 23
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -9828,7 +9828,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 109
+            "line": 111
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -9907,7 +9907,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 131
+            "line": 133
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -9986,7 +9986,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -10065,7 +10065,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 21
+            "line": 23
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -10144,7 +10144,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 31
+            "line": 33
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -10223,7 +10223,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 21
+            "line": 23
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -10237,7 +10237,7 @@
         "checks": [
           {
             "path": "apps/mcp/test/http.test.ts",
-            "line": 453,
+            "line": 557,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/mcp/test/http.test.ts",
             "receipt": "final-mcp-current-suite.log (current HTTP contracts passed)"
@@ -10302,7 +10302,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -10392,7 +10392,7 @@
           },
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -10406,7 +10406,7 @@
         "checks": [
           {
             "path": "apps/mcp/test/http.test.ts",
-            "line": 453,
+            "line": 557,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/mcp/test/http.test.ts",
             "receipt": "final-mcp-current-suite.log (current HTTP contracts passed)"
@@ -10482,7 +10482,7 @@
           },
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 199
+            "line": 201
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -10562,7 +10562,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 131
+            "line": 133
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -10641,7 +10641,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -10720,7 +10720,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -15108,7 +15108,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -16706,7 +16706,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 32
+            "line": 34
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -16779,7 +16779,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -16793,7 +16793,7 @@
         "checks": [
           {
             "path": "apps/mcp/test/http.test.ts",
-            "line": 561,
+            "line": 665,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/mcp/test/http.test.ts",
             "receipt": "final-mcp-current-suite.log (current HTTP contracts passed)"
@@ -16944,7 +16944,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -17018,7 +17018,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 21
+            "line": 23
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -17092,7 +17092,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 131
+            "line": 133
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -17106,7 +17106,7 @@
         "checks": [
           {
             "path": "apps/mcp/test/http.test.ts",
-            "line": 533,
+            "line": 637,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/mcp/test/http.test.ts",
             "receipt": "final-mcp-current-suite.log (current HTTP contracts passed)"
@@ -17165,7 +17165,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -17179,7 +17179,7 @@
         "checks": [
           {
             "path": "apps/mcp/test/http.test.ts",
-            "line": 453,
+            "line": 557,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/mcp/test/http.test.ts",
             "receipt": "final-mcp-current-suite.log (current HTTP contracts passed)"
@@ -17239,7 +17239,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -17253,7 +17253,7 @@
         "checks": [
           {
             "path": "apps/mcp/test/http.test.ts",
-            "line": 533,
+            "line": 637,
             "execution": "local_node22_working_source_pass",
             "command": "node --import tsx --test apps/mcp/test/http.test.ts",
             "receipt": "final-mcp-current-suite.log (current HTTP contracts passed)"
@@ -22427,7 +22427,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -22500,7 +22500,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -22579,7 +22579,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 28
+            "line": 30
           },
           {
             "path": "apps/mcp/src/api-client.ts",
@@ -22652,7 +22652,7 @@
         "sources": [
           {
             "path": "apps/mcp/src/server.ts",
-            "line": 21
+            "line": 23
           },
           {
             "path": "apps/mcp/src/api-client.ts",
