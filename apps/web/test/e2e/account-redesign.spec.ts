@@ -19,7 +19,7 @@ for (const width of [1280, 390]) test(`login headings follow reset and MFA steps
   await page.getByRole("button", { name: /forgot password/i }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText(/reset/i);
   await expect(page.getByLabel("Reset email", { exact: true })).toHaveValue("reader@example.test");
-  await page.getByRole("button", { name: "Back to login", exact: true }).click();
+  await page.getByRole("button", { name: "Back to sign in", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/login|sign in/i);
   await page.getByRole("button", { name: /forgot password/i }).click();
   await page.getByRole("button", { name: "Send reset email", exact: true }).click();

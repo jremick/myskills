@@ -834,6 +834,7 @@ export interface RegistryClient extends Partial<ArchitecturePlanClient>, Partial
   registerWithInvitation(input: { email: string; password: string; name?: string; inviteToken: string }): Promise<{ status: "pending" | "active" }>;
   requestPasswordReset(input: { email: string }): Promise<{ status: "pending" }>;
   confirmPasswordReset(input: { token: string; password: string }): Promise<{ status: "reset" }>;
+  requestEmailVerification(input: { email: string }): Promise<{ status: "pending" }>;
   confirmEmailVerification(input: { token: string }): Promise<{ status: "verified" }>;
   verifyMfa(input: { challengeToken: string; codeOrRecoveryCode: string }): Promise<SessionResult>;
   getMe(token?: string): Promise<WebAuthUser>;
@@ -1087,6 +1088,12 @@ export function createRegistryClient(baseUrl = defaultApiBaseUrl(), fetchImpl: t
     },
     async confirmPasswordReset(input) {
       return requestJson<{ status: "reset" }>(fetchImpl, `${root}/v1/auth/password-reset/confirm`, {
+        method: "POST",
+        body: input,
+      });
+    },
+    async requestEmailVerification(input) {
+      return requestJson<{ status: "pending" }>(fetchImpl, `${root}/v1/auth/email-verification/request`, {
         method: "POST",
         body: input,
       });
