@@ -24,6 +24,18 @@ RUN MYSKILLS_BUILD_REVISION=${MYSKILLS_BUILD_REVISION} node scripts/write-build-
   && npm prune --omit=dev
 
 FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS api
+# The pinned Node base contains only the bundle; install the CA package as well.
+RUN apk add --no-cache ca-certificates \
+  && apk upgrade --no-cache ca-certificates ca-certificates-bundle \
+  && for package in ca-certificates ca-certificates-bundle; do \
+       installed="$(apk info -v --installed "$package" | grep -E "^${package}-[0-9]+-r[0-9]+$")" \
+       && version="${installed#${package}-}" \
+       && test "$(apk version -t "$version" 20261020-r0)" != '<' \
+       && printf '%s\n' "$installed" || exit 1; \
+     done
+# TODO(emudhra-2026-10): drop --use-openssl-ca / SSL_CERT_FILE once the Node release containing nodejs/node#66871 ships and the base image is bumped
+ENV NODE_OPTIONS="--use-openssl-ca" \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3001
 WORKDIR /app
 COPY --from=build /app/package.json /app/package-lock.json ./
@@ -37,4 +49,9 @@ USER node
 EXPOSE 3001
 # The owner-role migrate container overrides CMD with dist/db/migrate.js.
 # Runtime startup must never call deploy/start-api.sh or seed.
+# Both controls must pass as the runtime user; bound network failures.
+RUN timeout 30s node -e "require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',()=>process.exit(1)).on('error',()=>process.exit(0))" \
+  && echo 'EMUDHRA_NEGATIVE exit 0' \
+  && timeout 30s node -e "require('https').get('https://api.resend.com',r=>{console.log('RESEND_TLS_OK HTTP '+r.statusCode);process.exit(0)}).on('error',e=>{console.error(e.code);process.exit(1)})" \
+  && echo 'RESEND_POSITIVE exit 0'
 CMD ["node", "apps/api/dist/server.js"]

@@ -53,3 +53,10 @@ the host monitor wrapper remain local and are not adopted during Phase 0.
 Keep backups, application containers, migrations and real tunnels stopped.
 
 GHCR/CI publishing remains deferred until the account has the workflow scope.
+
+EXP Node runtimes require CA packages >= 20261020-r0 and use `--use-openssl-ca`
+with `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`. Keep the flag if adding
+`NODE_OPTIONS` to an env file or run script. Runtime-stage builds check eMudhra
+rejection and Resend TLS. Remove this workaround after the Node release with
+nodejs/node#66871 ships and the pinned base is bumped. Railway production is
+unchanged and needs separate approval.
