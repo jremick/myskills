@@ -63,9 +63,11 @@ App and migrate commands also pass `--use-openssl-ca` directly so replacing
 nodejs/node#66871 ships and the pinned base is bumped. Railway production is
 unchanged and needs separate approval.
 
-The API/migrate images were rebuilt for eMudhra fix 1 from
-`d59c75c1bfe56c40f82c315fa2cbab879a0069a4`. Their immutable IDs are in
-`images.conf`; non-Node images retain the original pins.
+The API/migrate and backup images were rebuilt for eMudhra fix 2 from
+`b75733469ca3e776acc2fa8ee3b6882756e3296c`. The IDs in `images.conf` passed hardened
+throwaway TLS checks, including replacement of `NODE_OPTIONS` with a memory
+setting. These pins are prepared locally; applying them to EXP is a separate
+action. Other image pins are unchanged.
 
 Backup images now require both CA packages >= 20261020-r0, with a fail-closed
 version guard and runtime-user build TLS checks: eMudhra must fail with curl
