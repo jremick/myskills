@@ -8939,7 +8939,7 @@
         {
           "path": "scripts/check-prerelease.mjs",
           "line": 244,
-          "sha256": "0bd0137a2e43dadf44c6ae0334fd9611670f429e2fd03420b9d2dc09df1e3053",
+          "sha256": "f848586509faa218d1d9d120be3afe0b4dec56ccb9948ad87c51856468f64642",
           "anchor": "assertContains(\"docs/RELEASE.md\", \"npm run release:verify\");"
         },
         {
@@ -8967,7 +8967,7 @@
         {
           "path": "scripts/check-prerelease.mjs",
           "line": 131,
-          "sha256": "0bd0137a2e43dadf44c6ae0334fd9611670f429e2fd03420b9d2dc09df1e3053",
+          "sha256": "f848586509faa218d1d9d120be3afe0b4dec56ccb9948ad87c51856468f64642",
           "anchor": "if (!/^\\d+\\.\\d+\\.\\d+-beta\\.\\d+$/.test(version)) {",
           "command": "node scripts/check-prerelease.mjs",
           "execution": "prepared_not_run_on_final_commit"
@@ -8992,7 +8992,7 @@
         {
           "path": "scripts/check-prerelease.mjs",
           "line": 183,
-          "sha256": "0bd0137a2e43dadf44c6ae0334fd9611670f429e2fd03420b9d2dc09df1e3053",
+          "sha256": "f848586509faa218d1d9d120be3afe0b4dec56ccb9948ad87c51856468f64642",
           "anchor": "assertContains(\"docs/GETTING_STARTED.md\", \"cp .env.example .env\");"
         },
         {
@@ -9020,7 +9020,7 @@
         {
           "path": "scripts/check-prerelease.mjs",
           "line": 212,
-          "sha256": "0bd0137a2e43dadf44c6ae0334fd9611670f429e2fd03420b9d2dc09df1e3053",
+          "sha256": "f848586509faa218d1d9d120be3afe0b4dec56ccb9948ad87c51856468f64642",
           "anchor": "if (/^(?:file|link|workspace):/.test(String(specifier))) {",
           "command": "node scripts/check-prerelease.mjs",
           "execution": "prepared_not_run_on_final_commit"

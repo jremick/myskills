@@ -367,7 +367,7 @@ function checkImplementationInvariants() {
     failures.push(`New Fastify server surfaces require an explicit prerelease rate-limit invariant: ${fastifyServers.join(", ")}.`);
   }
 
-  for (const expected of ["MYSKILLS_MCP_TRUST_PROXY_HOPS", "120 requests per minute", "256 KiB"]) {
+  for (const expected of ["MYSKILLS_MCP_TRUST_PROXY_HOPS", "120 requests per minute", "14 MiB"]) {
     assertContains("apps/mcp/README.md", expected);
   }
 }
