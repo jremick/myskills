@@ -321,7 +321,16 @@ the source script and its migration, seed, and server sequence stay unchanged.
 The final build step runs as `node`, requires the eMudhra probe to fail with
 `UNABLE_TO_GET_ISSUER_CERT_LOCALLY` or `CERT_REVOKED` (any other error, a
 successful connection, or a timeout fails the build), and checks Resend and GitHub TLS with 30-second
-timeouts. These checks need build-time egress. The web image serves assets and
+timeouts. These checks need build-time egress. `CERT_REVOKED` comes from Node's
+built-in public-key (SPKI) blocklist in Node 22.23.4 and later
+([nodejs/node#66871](https://github.com/nodejs/node/pull/66871)), whichever CA
+store is used, so the eMudhra probe alone does not prove the CA store is
+correct. A separate build step, which runs as `node` before the probe, checks the
+CA store and prints `EMSIGN_ROOTS_ABSENT`. It requires `--use-openssl-ca` to be
+active, requires `SSL_CERT_FILE` and the system store to each hold at least 100
+certificates, and fails if either holds emSign ECC Root CA - C3, emSign ECC
+Root CA - G3 or emSign Root CA - C1. Node 24.19.0 (the backup image) does not
+include #66871. The web image serves assets and
 uses HTTP upstream defaults, so it only gets the CA update and guard. These
 source changes do not establish deployment or runtime verification.
 
