@@ -49,9 +49,8 @@ USER node
 EXPOSE 3001
 # The owner-role migrate container overrides CMD with dist/db/migrate.js.
 # Runtime startup must never call deploy/start-api.sh or seed.
-# Both controls must pass as the runtime user; bound network failures.
-RUN timeout 30s node -e "require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',()=>process.exit(1)).on('error',()=>process.exit(0))" \
-  && echo 'EMUDHRA_NEGATIVE exit 0' \
-  && timeout 30s node -e "require('https').get('https://api.resend.com',r=>{console.log('RESEND_TLS_OK HTTP '+r.statusCode);process.exit(0)}).on('error',e=>{console.error(e.code);process.exit(1)})" \
-  && echo 'RESEND_POSITIVE exit 0'
-CMD ["node", "apps/api/dist/server.js"]
+# Build-time egress is required (L3 accepted); each control runs as the runtime user.
+RUN timeout 30s node --use-openssl-ca -e "require('https').get('https://dv-g3b-emudhra.we-have-a-problem.com/',()=>{console.error('EMUDHRA_UNEXPECTED_SUCCESS');process.exit(1)}).on('error',e=>{console.log('EMUDHRA_NEGATIVE '+e.code);process.exit(e.code === 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY' ? 0 : 1)})" \
+  && timeout 30s node --use-openssl-ca -e "require('https').get('https://api.resend.com/',r=>{console.log('RESEND_TLS_OK '+r.statusCode);process.exit(0)}).on('error',e=>{console.error(e.code);process.exit(1)})" \
+  && timeout 30s node --use-openssl-ca -e "require('https').get('https://api.github.com/',r=>{console.log('GITHUB_TLS_OK '+r.statusCode);process.exit(0)}).on('error',e=>{console.error(e.code);process.exit(1)})"
+CMD ["node", "--use-openssl-ca", "apps/api/dist/server.js"]

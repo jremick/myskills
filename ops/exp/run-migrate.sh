@@ -8,4 +8,4 @@ exec "${COMMAND[@]}" "${COMMON[@]}" \
   --memory 256m \
   --network name=myskills-db,ip=172.30.41.6 \
   --env-file /mnt/cache/appdata/myskills/secrets/migrate.env \
-  "${IMAGE_API}" node apps/api/dist/db/migrate.js
+  "${IMAGE_API}" node --use-openssl-ca apps/api/dist/db/migrate.js
