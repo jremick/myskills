@@ -10,6 +10,8 @@ import { createRegistryApiClient, type RegistryApiClientOptions } from "./api-cl
 import { createAiSkillsMcpHandlers } from "./tools.js";
 import { createNativeSkillsHandlers, NATIVE_RESOURCE_URI_CHARS, SKILLS_EXTENSION } from "./skills.js";
 
+export const MAX_TOOL_INPUT_ELEMENTS = 10_000;
+
 export interface AiSkillsMcpServerOptions extends RegistryApiClientOptions {
   name?: string;
   version?: string;
@@ -22,7 +24,7 @@ export function createAiSkillsMcpServer(options: AiSkillsMcpServerOptions = {}):
   const server = new McpServer({
     name: options.name ?? "myskills-app",
     version: options.version ?? "0.1.0",
-  });
+  }, { maxToolInputElements: MAX_TOOL_INPUT_ELEMENTS });
   const client = createRegistryApiClient(options);
   const handlers = createAiSkillsMcpHandlers(client);
   registerBundleTools(server, client, { session: options.session });

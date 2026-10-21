@@ -111,7 +111,7 @@ export function registerBundleTools(
       inputSchema: z.object({
         action: z.enum(["create", "edit", "save"]),
         id: z.string().max(128).optional(),
-        input: z.record(z.string(), z.unknown()),
+        input: z.record(z.string(), z.unknown()).refine(value => Object.keys(value).length <= 256, "input must contain at most 256 keys."),
       }),
       annotations: {
         readOnlyHint: false,

@@ -66,7 +66,7 @@ const fields: Record<string, z.ZodType> = {
     z.object({ kind: z.literal("source"), url: text(2000), ref: z.object({ kind: z.enum(librarySourceRefKinds), value: z.string().max(256).optional() }).strict().optional(), path: z.string().max(1024).optional(), clientMutationId: mutationId }).strict(),
   ]),
   "library_entries.discover": empty,
-  "library_entries.preview": z.object({ snapshotId: id, paths: z.array(z.string().max(1024)).max(2000), mappings: z.record(z.string().max(1024), object).optional() }).strict(),
+  "library_entries.preview": z.object({ snapshotId: id, paths: z.array(z.string().max(1024)).max(2000), mappings: z.record(z.string().max(1024), object).refine(value => Object.keys(value).length <= 2000, "mappings must contain at most 2000 keys.").optional() }).strict(),
   "library_candidates.import": z.object({ expectedPackageDigest: digest, release: object.optional(), acknowledgeUnverifiedOrder: z.object({ reason: text(500) }).strict().optional(), clientMutationId: mutationId }).strict(),
   "library_candidates.ignore": empty,
   "library_candidates.self_review": z.object({ artifactSha256: digest, reason }).strict(),
