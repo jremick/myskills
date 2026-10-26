@@ -94,6 +94,19 @@ test("consent explains sign-in, MFA, expiry, reuse, limits and disabled servers 
   }
 });
 
+test("consent renders descriptions instead of raw scope ids and keeps Allow disabled for MFA", async () => {
+  const view = render(<ConnectAuthorizePage client={fakeClient({ details: { mfaRequired: true, scopes: [
+    { scope: "skills:read", description: "Find skills you can access." },
+    { scope: "skills:submit", description: "   " },
+  ] } })} error={null} handle={HANDLE} signedIn onFinished={() => {}} onSignIn={() => {}} assignLocation={() => assert.fail()} />);
+  await view.findByText("Find skills you can access.");
+  await view.findByText("Submit skills");
+  assert.equal(view.queryByText("skills:read"), null);
+  assert.equal(view.queryByText("skills:submit"), null);
+  assert.equal((view.getByRole("button", { name: "Allow access" }) as HTMLButtonElement).disabled, true);
+  assert.ok(view.getByRole("button", { name: "Deny" }));
+});
+
 test("settings show setup guidance only for a configured endpoint and revoke connections after confirmation", async () => {
   const disabled = fakeClient({ connector: { enabled: false, mcpUrl: null } });
   const off = render(<RemoteConnections client={disabled} />);

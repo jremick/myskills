@@ -378,6 +378,20 @@ test("registry client supports account recovery and settings endpoints", async (
   assert.equal(calls[8].body, JSON.stringify({ name: "MCP", scopes: ["skills:read"] }));
 });
 
+test("registry client requests a new email verification without confirming the token", async () => {
+  const calls: Array<{ body?: string; method?: string; url: string }> = [];
+  const client = createRegistryClient("http://api.test", async (input, init) => {
+    calls.push({ body: typeof init?.body === "string" ? init.body : undefined, method: init?.method, url: String(input) });
+    return jsonResponse(202, { status: "pending" });
+  });
+  assert.deepEqual(await client.requestEmailVerification({ email: "reader@example.com" }), { status: "pending" });
+  assert.deepEqual(calls, [{
+    method: "POST",
+    url: "http://api.test/v1/auth/email-verification/request",
+    body: JSON.stringify({ email: "reader@example.com" }),
+  }]);
+});
+
 test("registry client manages admin settings with the session bearer", async () => {
   const calls: Array<{ body?: string; method?: string; url: string; authorization?: string }> = [];
   const client = createRegistryClient("http://api.test", async (input, init) => {

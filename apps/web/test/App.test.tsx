@@ -52,7 +52,10 @@ test("landing page explains public beta status and opens the login page", async 
 
   fireEvent.click(view.getAllByRole("link", { name: "Sign in" })[0]!);
 
-  await view.findByRole("heading", { name: "Login" });
+  await view.findByRole("heading", { name: "Sign in" });
+  assert.match(document.body.textContent ?? "", /does not send an invitation/);
+  assert.equal(view.queryByRole("link", { name: "Request access" }), null);
+  assert.equal(document.body.textContent?.includes("Hosted signups are closed"), false);
   assert.deepEqual(client.searchCalls, []);
   assert.equal(document.body.textContent?.includes("Release Notes Helper"), false);
   assert.equal(window.location.pathname, "/login");
@@ -66,7 +69,7 @@ test("root waits for fresh site configuration, replaces disabled root, and hides
   const view = render(<RegistryApp client={client} />);
   assert.equal(view.queryByRole("heading", { name: /Your AI/ }), null);
   await act(async () => resolveSite({ landingPageEnabled: false }));
-  await view.findByRole("heading", { name: "Login" });
+  await view.findByRole("heading", { name: "Sign in" });
   assert.equal(window.location.pathname, "/login");
   assert.equal(view.queryByRole("link", { name: "Public site" }), null);
   assert.equal(view.queryByRole("link", { name: "MySkills" }), null);
@@ -142,7 +145,7 @@ test("invited users complete registration without leaving the token in browser h
   fireEvent.input(view.getByLabelText("Confirm password"), { target: { value: "correct horse battery staple" } });
   fireEvent.click(view.getByRole("button", { name: "Create account" }));
 
-  await view.findByText("Registration complete. You can now log in.");
+  await view.findByText("Registration complete. You can now sign in.");
   assert.deepEqual(client.registrationCalls, [{
     email: "Invited@Example.com",
     name: "Invited User",
@@ -151,8 +154,8 @@ test("invited users complete registration without leaving the token in browser h
   }]);
   assert.equal(document.body.textContent?.includes("invitation-token"), false);
 
-  fireEvent.click(view.getByRole("link", { name: "Continue to login" }));
-  await view.findByRole("heading", { name: "Login" });
+  fireEvent.click(view.getByRole("link", { name: "Continue to sign in" }));
+  await view.findByRole("heading", { name: "Sign in" });
   assert.equal(window.location.pathname, "/login");
 });
 
@@ -197,7 +200,7 @@ test("new passwords are checked by UTF-8 bytes without restricting legacy login"
   fireEvent.input(view.getByLabelText("Password"), { target: { value: allowed } });
   fireEvent.input(view.getByLabelText("Confirm password"), { target: { value: allowed } });
   fireEvent.click(view.getByRole("button", { name: "Create account" }));
-  await view.findByText("Registration complete. You can now log in.");
+  await view.findByText("Registration complete. You can now sign in.");
   assert.equal(client.registrationCalls[0]?.password, allowed);
   cleanup();
 
@@ -2731,6 +2734,9 @@ function mockClient(input: {
     },
     async confirmPasswordReset() {
       return { status: "reset" };
+    },
+    async requestEmailVerification() {
+      return { status: "pending" };
     },
     async confirmEmailVerification() {
       return { status: "verified" };

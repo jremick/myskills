@@ -27,7 +27,10 @@ export function registerDeviceLoginRoutes(app: FastifyInstance, options: {
     if (context.credential.kind !== "session") throw new AppError("A browser session is required.", "SESSION_AUTH_REQUIRED", 403);
     const token = authorization?.slice(7);
     if (!token) throw new AppError("Sign in to authorize CLI access.", "AUTHENTICATION_REQUIRED", 401);
-    return { user: context.user, hash: hashSessionToken(token) };
+    const hash = hashSessionToken(token);
+    const facts = await options.authService.browserSessionFacts(hash);
+    if (!facts) throw new AppError("Sign in to authorize CLI access.", "AUTHENTICATION_REQUIRED", 401);
+    return { facts, hash };
   }
   app.post("/v1/auth/device/start", async (request, reply) => {
     reply.header("cache-control", "no-store");
@@ -44,14 +47,14 @@ export function registerDeviceLoginRoutes(app: FastifyInstance, options: {
     reply.header("cache-control", "no-store");
     await limit(request, "consent");
     const actor = await session(request);
-    return service().inspect(body(request.body).userCode, actor.user.roles);
+    return service().inspect(body(request.body).userCode, actor.facts);
   });
   app.post("/v1/auth/device/decision", async (request, reply) => {
     reply.header("cache-control", "no-store");
     await limit(request, "consent");
     const actor = await session(request);
     const input = body(request.body);
-    return service().decide({ userCode: input.userCode, decision: input.decision, userId: actor.user.id, sessionTokenHash: actor.hash });
+    return service().decide({ userCode: input.userCode, decision: input.decision, userId: actor.facts.userId, sessionTokenHash: actor.hash });
   });
 }
 function body(value: unknown): Record<string, unknown> {
