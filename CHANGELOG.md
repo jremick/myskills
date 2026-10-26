@@ -2,6 +2,20 @@
 
 All notable user-facing changes will be tracked here. MySkills is still prerelease software; breaking changes may happen between beta releases and will be called out in this file.
 
+## 0.1.0-beta.21 - candidate
+
+Target release: `v0.1.0-beta.21`.
+
+- Patch Zod to 4.6.7, Fastify to 5.12.7, Nodemailer to 10.2.1, and both fast-uri dependency lines to 3.1.9 and 4.2.3.
+- Include the already-merged MCP SDK 2.3.1, Hono 4.13.13 and Vite 8.3.5 security updates.
+- Include the skill content preview and CI verification repairs already merged since beta.20.
+
+The full dependency audit and production-only audit report zero vulnerabilities
+for the patched lockfile. Exact-candidate CI, CodeQL, tagged release verification
+and GitHub/npm publication remain pending. No database migration is added since
+beta.20. Hosted deployment and the self-host migration are separate work. See
+[beta.21 release delivery](docs/BETA21_RELEASE_DELIVERY.md).
+
 ## 0.1.0-beta.20 - candidate
 
 Target release: `v0.1.0-beta.20`.
