@@ -1,15 +1,25 @@
 # Release Process
 
-Version: 0.1.0-beta.20
-Last updated: 2026-10-02
+Version: 0.1.0-beta.21
+Last updated: 2026-10-27
 
 MySkills beta releases are verification-first and approval-gated. A passing command is evidence about one commit; it is not permission to create a tag, publish a package, create a GitHub Release, push an image, or deploy production.
 
 The archived alpha criteria remain in [Alpha Release Goal](ALPHA_RELEASE_GOAL.md). The current acceptance ledger is [Public Beta Delivery Brief](BETA_RELEASE_GOAL.md).
 
-## Beta.20 candidate
+## Beta.21 candidate
 
-The current target is `v0.1.0-beta.20`: a CLI-focused follow-up to published beta.19.
+The current target is `v0.1.0-beta.21`. It patches the remaining audited
+dependency vulnerabilities and includes the updates already merged since
+beta.20. Full and production-only dependency audits report zero vulnerabilities.
+Complete exact-candidate CI, CodeQL and tagged canonical verification before
+publishing the GitHub prerelease and npm beta package. No schema migration is
+added since beta.20. Hosted deployment and the self-host migration are separate
+work. See [Beta.21 release delivery](BETA21_RELEASE_DELIVERY.md).
+
+## Beta.20 preparation record
+
+The previous target was `v0.1.0-beta.20`: a CLI-focused follow-up to published beta.19.
 It adds secure resumption of pending browser/device login, bounded original
 expiry and polling, process serialization, explicit `--no-resume`, and distinct
 credential/configuration-save outcomes. API consent, scopes, MFA, token lifetime
@@ -281,9 +291,9 @@ Draft public release text in a file and use `--notes-file` or the GitHub UI if a
 
 ## CLI Package Publication
 
-The prepared CLI candidate is `0.1.0-beta.20`. The recorded publication snapshot
-on 30 September 2026 had the GitHub CLI archive at `0.1.0-beta.17` and npm's
-`beta` selector at `0.1.0-beta.16`. The package uses
+The prepared CLI candidate is `0.1.0-beta.21`. Readback on 27 October 2026
+confirmed the published GitHub and npm CLI artifacts at `0.1.0-beta.20`
+matched byte for byte. The package uses
 `publishConfig.tag=beta`. `@myskills-app/skill-package` remains a private
 build-time dependency only; esbuild embeds it in the public CLI bundle.
 GitHub publication does not change the published npm version.

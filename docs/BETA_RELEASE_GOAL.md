@@ -1,19 +1,16 @@
 # Operational Beta Delivery Brief
 
-Version: 0.1.0-beta.20
-Last updated: 2026-09-30
+Version: 0.1.0-beta.21
+Last updated: 2026-10-27
 
-Target release: `v0.1.0-beta.20`.
+Target release: `v0.1.0-beta.21`.
 
-Status: beta.20 release preparation for bounded CLI browser-login resilience.
-Pending requests can resume securely within their original deadline; consent,
-scopes, MFA assurance, token lifetime and one-time API redemption remain intact.
-The local 72-check selection passed with synthetic keyring storage and real
-loopback HTTP/processes. Native keyring and real account acceptance remain
-unverified. Final exact-source checks, immutable tagging and GitHub/npm
-publication are pending. Cumulative source artifacts also retain the device
-form spacing from merged PR #136. Hosted API/web/MCP deployment is unchanged. See
-[Beta.20 release preparation](BETA20_RELEASE_DELIVERY.md).
+Status: beta.21 security release preparation. Patch the remaining audited
+dependency vulnerabilities and publish the updates already merged since beta.20.
+The full and production-only dependency audits report zero vulnerabilities.
+Exact-candidate CI, CodeQL, tagged release verification and GitHub/npm
+publication remain pending. Hosted deployment and the self-host migration are
+separate work. See [Beta.21 release delivery](BETA21_RELEASE_DELIVERY.md).
 
 ## Beta.17 Release Record
 
