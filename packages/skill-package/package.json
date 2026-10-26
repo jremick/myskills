@@ -17,7 +17,7 @@
   "dependencies": {
     "@myskills-app/core": "0.1.0-beta.20",
     "yauzl": "^3.4.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/yauzl": "^3.4.0",
