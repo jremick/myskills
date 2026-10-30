@@ -2,7 +2,7 @@
 
 ARG TARGETARCH
 
-FROM debian:bookworm-slim@sha256:f3034a6ec3c1205360777c4aae76234998866ad18806ae62b63a3f84ccad782b AS base
+FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS base
 
 # Official release assets, pinned independently for each supported CPU.
 FROM base AS binaries-amd64
